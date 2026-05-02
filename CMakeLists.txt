@@ -19,6 +19,8 @@ add_subdirectory(library/volk)
 
 set(SOURCES
 	src/main.cc
+	src/core/error/error_list.cc
+	src/core/error/error_macros.cc
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
