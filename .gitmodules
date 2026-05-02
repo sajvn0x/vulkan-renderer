@@ -1,0 +1,9 @@
+[submodule "library/vulkan-headers"]
+	path = library/vulkan-headers
+	url = https://github.com/KhronosGroup/Vulkan-Headers.git
+[submodule "library/vulkan-utils"]
+	path = library/vulkan-utils
+	url = https://github.com/KhronosGroup/Vulkan-Utility-Libraries.git
+[submodule "library/volk"]
+	path = library/volk
+	url = https://github.com/zeux/volk.git
