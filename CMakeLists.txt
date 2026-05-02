@@ -21,6 +21,7 @@ set(SOURCES
 	src/main.cc
 	src/core/error/error_list.cc
 	src/core/error/error_macros.cc
+	src/renderer/driver_context.cc
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})

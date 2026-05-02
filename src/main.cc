@@ -1,10 +1,10 @@
-#include <volk.h>
-
-#include <iostream>
+#include "renderer/driver_context.hh"
 
 int main(void) {
-    if (volkInitialize() != VK_SUCCESS) {
-        std::cout << "failed to load the vulkan" << std::endl;
+    RenderingDriverContext driver_context = RenderingDriverContext();
+
+    if (driver_context.initialize() != OK) {
+        return -1;
     }
 
     return 0;
