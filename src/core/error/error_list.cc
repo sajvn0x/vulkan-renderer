@@ -12,6 +12,7 @@ const char *error_names[] = {
     "File already in use",            // ERR_FILE_ALREADY_IN_USE
     "Can't open file",                // ERR_FILE_CANT_OPEN
     "Can't write file",               // ERR_FILE_CANT_WRITE
+    "Can't create",                   // ERR_CANT_CREATE
     "Can't read file",                // ERR_FILE_CANT_READ
     "File unrecognized",              // ERR_FILE_UNRECOGNIZED
     "File corrupt",                   // ERR_FILE_CORRUPT

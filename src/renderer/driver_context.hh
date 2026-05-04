@@ -49,6 +49,9 @@ class RenderingDriverContext {
                                                  bool p_required);
     Error _initialize_devices();
 
+   protected:
+    const char* _get_platform_surface_extension();
+
    public:
     Error initialize();
     const Device& device_get(uint32_t p_device_index) const {

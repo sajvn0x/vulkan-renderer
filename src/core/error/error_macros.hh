@@ -19,3 +19,26 @@ _NO_INLINE_ void err_print_error(const char *p_function, const char *p_file,
         return m_retval;                                                       \
     } else                                                                     \
         ((void)0)
+
+#define ERR_FAIL_COND_V_MSG(m_cond, m_retval, m_msg)              \
+    if (unlikely(m_cond)) {                                       \
+        err_print_error(FUNCTION_STR, __FILE__, __LINE__, m_msg); \
+        return m_retval;                                          \
+    } else                                                        \
+        ((void)0)
+
+#define ERR_FAIL_V(m_retval)                                                   \
+    if (true) {                                                                \
+        err_print_error(FUNCTION_STR, __FILE__, __LINE__,                      \
+                        "Method/function failed. Returning: " _STR(m_retval)); \
+        return m_retval;                                                       \
+    } else                                                                     \
+        ((void)0)
+
+#define ERR_FAIL_V_MSG(m_retval, m_msg)                                        \
+    if (true) {                                                                \
+        err_print_error(FUNCTION_STR, __FILE__, __LINE__,                      \
+                        "Method/function failed. Returning: " _STR(m_retval)); \
+        return m_retval;                                                       \
+    } else                                                                     \
+        ((void)0)
