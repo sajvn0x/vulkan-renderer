@@ -16,6 +16,8 @@ if(NOT TARGET Vulkan::Headers)
 endif()
 
 add_subdirectory(library/volk)
+add_subdirectory(library/vma)
+add_subdirectory(library/glfw)
 
 set(SOURCES
 	src/main.cc
@@ -33,4 +35,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Vulkan::Headers
 	volk
+	VulkanMemoryAllocator
+	glfw
 )
