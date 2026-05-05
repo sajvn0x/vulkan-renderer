@@ -36,11 +36,19 @@ struct Device {
 
 class RenderingDriverContext {
    private:
+    struct DeviceQueueFamilies {
+        Vector<VkQueueFamilyProperties> properties;
+    };
+
     VkInstance instance = VK_NULL_HANDLE;
     uint32_t instance_api_version = VK_API_VERSION_1_0;
     HashMap<String, bool> requested_instance_extensions;
     HashSet<String> enabled_instance_extension_names;
     Vector<Device> driver_devices;
+    Vector<VkPhysicalDevice> physical_devices;
+    Vector<DeviceQueueFamilies> device_queue_families;
+    VkDebugUtilsMessengerEXT debug_messenger = VK_NULL_HANDLE;
+    VkDebugReportCallbackEXT debug_report = VK_NULL_HANDLE;
 
     Error _initialize_vulkan_version();
     Error _initialize_instance_extensions();
@@ -48,9 +56,6 @@ class RenderingDriverContext {
     Error _register_requested_instance_extension(const String& p_extension_name,
                                                  bool p_required);
     Error _initialize_devices();
-
-   protected:
-    const char* _get_platform_surface_extension();
 
    public:
     Error initialize();

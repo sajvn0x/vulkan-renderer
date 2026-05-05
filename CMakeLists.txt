@@ -21,10 +21,17 @@ add_subdirectory(library/glfw)
 
 set(SOURCES
 	src/main.cc
+	src/engine.cc
+
+	# core
 	src/core/error/error_list.cc
 	src/core/error/error_macros.cc
+
+	# renderer
 	src/renderer/driver_context.cc
 )
+
+add_compile_options(-g)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 

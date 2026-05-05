@@ -1,7 +1,10 @@
 #include "driver_context.hh"
 
+#include <GLFW/glfw3.h>
+
 #include "core/containers.hh"
 #include "core/error/error_macros.hh"
+#include "version.hh"
 
 Error RenderingDriverContext::initialize() {
     Error err = OK;
@@ -18,6 +21,8 @@ Error RenderingDriverContext::initialize() {
 
     err = _initialize_instance();
     ERR_FAIL_COND_V(err != OK, err);
+
+    volkLoadInstance(instance);
 
     err = _initialize_devices();
     ERR_FAIL_COND_V(err != OK, err);
@@ -36,10 +41,17 @@ Error RenderingDriverContext::_initialize_instance_extensions() {
     enabled_instance_extension_names.clear();
 
     _register_requested_instance_extension(VK_KHR_SURFACE_EXTENSION_NAME, true);
-    if (_get_platform_surface_extension()) {
-        _register_requested_instance_extension(
-            _get_platform_surface_extension(), true);
+
+    // glfw required instance extensions
+    uint32_t glfw_required_extension_count = 0;
+    const char** glfw_required_extensions =
+        glfwGetRequiredInstanceExtensions(&glfw_required_extension_count);
+
+    for (int i = 0; i < glfw_required_extension_count; ++i) {
+        _register_requested_instance_extension(glfw_required_extensions[i],
+                                               true);
     }
+
     _register_requested_instance_extension(VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
                                            false);
     _register_requested_instance_extension(
@@ -83,8 +95,7 @@ Error RenderingDriverContext::_initialize_instance_extensions() {
                 ERR_FAIL_V_MSG(ERR_CANT_CREATE, String("Required extension ") +
                                                     name +
                                                     String(" not found."));
-            } else {
-            };
+            }
         }
     }
 
@@ -92,26 +103,100 @@ Error RenderingDriverContext::_initialize_instance_extensions() {
 }
 
 Error RenderingDriverContext::_initialize_instance() {
-    Error err = OK;
+    Vector<const char*> enabled_extension_names;
 
-    return err;
+    uint32_t application_api_version =
+        instance_api_version == VK_API_VERSION_1_0 ? VK_API_VERSION_1_0
+                                                   : VK_API_VERSION_1_4;
+
+    VkApplicationInfo app_info = {};
+    app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    app_info.pApplicationName = APP_NAME;
+    app_info.pEngineName = APP_ENGINE_NAME;
+    app_info.engineVersion = VK_MAKE_VERSION(
+        APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_PATCH);
+    app_info.apiVersion = application_api_version;
+
+    Vector<const char*> enabled_layer_names;
+    enabled_layer_names.push_back("VK_LAYER_KHRONOS_validation");
+
+    VkInstanceCreateInfo instance_info = {};
+    instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    instance_info.enabledExtensionCount = enabled_extension_names.size();
+    instance_info.ppEnabledExtensionNames = enabled_extension_names.data();
+    instance_info.enabledLayerCount = enabled_layer_names.size();
+    instance_info.ppEnabledLayerNames = enabled_layer_names.data();
+
+    VkResult result = vkCreateInstance(&instance_info, nullptr, &instance);
+
+    ERR_FAIL_COND_V_MSG(
+        result == VK_ERROR_INCOMPATIBLE_DRIVER, ERR_CANT_CREATE,
+        "Cannot find a compatible Vulkan installable client driver (ICD).\n\n"
+        "vkCreateInstance Failure");
+    ERR_FAIL_COND_V_MSG(result == VK_ERROR_EXTENSION_NOT_PRESENT,
+                        ERR_CANT_CREATE,
+                        "Cannot find a specified extension library.\n"
+                        "Make sure your layers path is set appropriately.\n"
+                        "vkCreateInstance Failure");
+    ERR_FAIL_COND_V_MSG(
+        result, ERR_CANT_CREATE,
+        "vkCreateInstance failed.\n\n"
+        "Do you have a compatible Vulkan installable client driver (ICD) "
+        "installed?\n");
+
+    return OK;
 }
 
 Error RenderingDriverContext::_register_requested_instance_extension(
     const String& p_extension_name, bool p_required) {
-    Error err = OK;
+    requested_instance_extensions[p_extension_name] = p_required;
 
-    return err;
+    return OK;
 }
 
 Error RenderingDriverContext::_initialize_devices() {
-    Error err = OK;
+    uint32_t physical_device_count = 0;
+    VkResult err =
+        vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
+    ERR_FAIL_COND_V(err != VK_SUCCESS, ERR_CANT_CREATE);
+    ERR_FAIL_COND_V_MSG(
+        physical_device_count == 0, ERR_CANT_CREATE,
+        "vkEnumeratePhysicalDevices reported zero accessible devices.\n\nDo "
+        "you have a compatible Vulkan installable client driver (ICD) "
+        "installed?\nvkEnumeratePhysicalDevices Failure.");
 
-    return err;
-}
+    driver_devices.resize(physical_device_count);
+    physical_devices.resize(physical_device_count);
+    device_queue_families.resize(physical_device_count);
+    err = vkEnumeratePhysicalDevices(instance, &physical_device_count,
+                                     physical_devices.data());
+    ERR_FAIL_COND_V(err != VK_SUCCESS, ERR_CANT_CREATE);
 
-const char* RenderingDriverContext::_get_platform_surface_extension() {
-    return "VK_KHR_xcb_surface";
+    // Fill the list of driver devices with the properties from the physical
+    // devices.
+    for (uint32_t i = 0; i < physical_devices.size(); i++) {
+        VkPhysicalDeviceProperties props;
+        vkGetPhysicalDeviceProperties(physical_devices[i], &props);
+
+        Device& driver_device = driver_devices[i];
+        driver_device.name = props.deviceName;
+        driver_device.vendor = props.vendorID;
+        driver_device.type = DeviceType(props.deviceType);
+
+        uint32_t queue_family_properties_count = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(
+            physical_devices[i], &queue_family_properties_count, nullptr);
+
+        if (queue_family_properties_count > 0) {
+            device_queue_families[i].properties.resize(
+                queue_family_properties_count);
+            vkGetPhysicalDeviceQueueFamilyProperties(
+                physical_devices[i], &queue_family_properties_count,
+                device_queue_families[i].properties.data());
+        }
+    }
+
+    return OK;
 }
 
 RenderingDriverContext::RenderingDriverContext() {}
