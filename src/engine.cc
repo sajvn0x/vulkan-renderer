@@ -1,6 +1,7 @@
 #include "engine.hh"
 
 #include "core/error/error_macros.hh"
+#include "version.hh"
 
 void Engine::run() {
     while (!glfwWindowShouldClose(window)) {
@@ -15,8 +16,12 @@ Error Engine::initialize() {
     Error err = driver_context.initialize();
     ERR_FAIL_COND_V(err != OK, err);
 
-    window = glfwCreateWindow(800, 600, "Vulkan", nullptr, nullptr);
-    ERR_FAIL_COND_V_MSG(err != OK, err, "Failed to create window");
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+
+    window =
+        glfwCreateWindow(mode->width, mode->height, APP_NAME, nullptr, nullptr);
+    ERR_FAIL_COND_V_MSG(window == nullptr, err, "Failed to create window");
 
     return OK;
 }
