@@ -9,9 +9,8 @@
 Error RenderingDriverContext::initialize() {
     Error err = OK;
 
-    if (volkInitialize() != VK_SUCCESS) {
-        return FAILED;
-    }
+    ERR_FAIL_COND_V_MSG(volkInitialize() != VK_SUCCESS, FAILED,
+                        "Failed to load volk");
 
     err = _initialize_vulkan_version();
     ERR_FAIL_COND_V(err != OK, err);
@@ -197,6 +196,37 @@ Error RenderingDriverContext::_initialize_devices() {
     }
 
     return OK;
+}
+
+const Device& RenderingDriverContext::device_get(uint32_t p_device_index) {
+    DEV_ASSERT(p_device_index < driver_devices.size());
+    return driver_devices[p_device_index];
+}
+
+uint32_t RenderingDriverContext::device_get_count() const {
+    return driver_devices.size();
+}
+
+VkInstance RenderingDriverContext::instance_get() const { return instance; }
+
+VkPhysicalDevice RenderingDriverContext::physical_device_get(
+    uint32_t p_device_index) const {
+    DEV_ASSERT(p_device_index < physical_devices.size());
+    return physical_devices[p_device_index];
+}
+
+uint32_t RenderingDriverContext::queue_family_get_count(
+    uint32_t p_device_index) const {
+    DEV_ASSERT(p_device_index < physical_devices.size());
+    return device_queue_families[p_device_index].properties.size();
+}
+
+VkQueueFamilyProperties RenderingDriverContext::queue_family_get(
+    uint32_t p_device_index, uint32_t p_queue_family_index) const {
+    DEV_ASSERT(p_device_index < physical_devices.size());
+    DEV_ASSERT(p_queue_family_index < queue_family_get_count(p_device_index));
+    return device_queue_families[p_device_index]
+        .properties[p_queue_family_index];
 }
 
 RenderingDriverContext::RenderingDriverContext() {}

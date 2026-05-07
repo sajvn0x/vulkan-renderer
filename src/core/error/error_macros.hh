@@ -42,3 +42,15 @@ _NO_INLINE_ void err_print_error(const char *p_function, const char *p_file,
         return m_retval;                                                       \
     } else                                                                     \
         ((void)0)
+
+#ifdef DEV_ENABLED
+#define DEV_ASSERT(m_cond)                                               \
+    if (unlikely(!(m_cond))) {                                           \
+        err_print_error(                                                 \
+            FUNCTION_STR, __FILE__, __LINE__,                            \
+            "FATAL: DEV_ASSERT failed  \"" _STR(m_cond) "\" is false."); \
+    } else                                                               \
+        ((void)0)
+#else
+#define DEV_ASSERT(m_cond)
+#endif
