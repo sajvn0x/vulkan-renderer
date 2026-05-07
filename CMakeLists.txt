@@ -36,6 +36,7 @@ set(SOURCES
 )
 
 add_compile_options(-g)
+add_compile_options(-Wall)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
