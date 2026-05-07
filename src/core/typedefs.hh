@@ -1,8 +1,7 @@
 #pragma once
 
 #ifndef _RESTRICT_
-#if defined(restrict) || \
-    ((defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)))
+#if defined(restrict) || ((defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)))
 #define _RESTRICT_ restrict
 #elif defined(_MSC_VER) || defined(__GNUC__) || defined(__clang__)
 #define _RESTRICT_ __restrict
@@ -20,8 +19,7 @@
 #endif
 
 #ifndef _DEPRECATED
-#if defined(__GNUC__) && \
-    (__GNUC__ >= 4) /* technically, this arrived in gcc 3.1, but oh well. */
+#if defined(__GNUC__) && (__GNUC__ >= 4) /* technically, this arrived in gcc 3.1, but oh well. */
 #define _DEPRECATED __attribute__((deprecated))
 #elif defined(_MSC_VER)
 #define _DEPRECATED __declspec(deprecated)

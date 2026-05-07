@@ -53,8 +53,7 @@ class RenderingDriverContext {
     Error _initialize_vulkan_version();
     Error _initialize_instance_extensions();
     Error _initialize_instance();
-    Error _register_requested_instance_extension(const String& p_extension_name,
-                                                 bool p_required);
+    Error _register_requested_instance_extension(const String& p_extension_name, bool p_required);
     Error _initialize_devices();
 
    public:
@@ -65,8 +64,8 @@ class RenderingDriverContext {
     VkInstance instance_get() const;
     VkPhysicalDevice physical_device_get(uint32_t p_device_index) const;
     uint32_t queue_family_get_count(uint32_t p_device_index) const;
-    VkQueueFamilyProperties queue_family_get(
-        uint32_t p_device_index, uint32_t p_queue_family_index) const;
+    VkQueueFamilyProperties queue_family_get(uint32_t p_device_index,
+                                             uint32_t p_queue_family_index) const;
 
     RenderingDriverContext();
     ~RenderingDriverContext();

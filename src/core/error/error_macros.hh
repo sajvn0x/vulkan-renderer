@@ -8,16 +8,15 @@
 #define FUNCTION_STR __FUNCTION__
 #endif
 
-_NO_INLINE_ void err_print_error(const char *p_function, const char *p_file,
-                                 int p_line, const char *p_error);
+_NO_INLINE_ void err_print_error(const char *p_function, const char *p_file, int p_line,
+                                 const char *p_error);
 
-#define ERR_FAIL_COND_V(m_cond, m_retval)                                      \
-    if (unlikely(m_cond)) {                                                    \
-        err_print_error(FUNCTION_STR, __FILE__, __LINE__,                      \
-                        "Condition \"" _STR(                                   \
-                            m_cond) "\" is true. Returning: " _STR(m_retval)); \
-        return m_retval;                                                       \
-    } else                                                                     \
+#define ERR_FAIL_COND_V(m_cond, m_retval)                                                      \
+    if (unlikely(m_cond)) {                                                                    \
+        err_print_error(FUNCTION_STR, __FILE__, __LINE__,                                      \
+                        "Condition \"" _STR(m_cond) "\" is true. Returning: " _STR(m_retval)); \
+        return m_retval;                                                                       \
+    } else                                                                                     \
         ((void)0)
 
 #define ERR_FAIL_COND_V_MSG(m_cond, m_retval, m_msg)              \
@@ -44,12 +43,11 @@ _NO_INLINE_ void err_print_error(const char *p_function, const char *p_file,
         ((void)0)
 
 #ifdef DEV_ENABLED
-#define DEV_ASSERT(m_cond)                                               \
-    if (unlikely(!(m_cond))) {                                           \
-        err_print_error(                                                 \
-            FUNCTION_STR, __FILE__, __LINE__,                            \
-            "FATAL: DEV_ASSERT failed  \"" _STR(m_cond) "\" is false."); \
-    } else                                                               \
+#define DEV_ASSERT(m_cond)                                                           \
+    if (unlikely(!(m_cond))) {                                                       \
+        err_print_error(FUNCTION_STR, __FILE__, __LINE__,                            \
+                        "FATAL: DEV_ASSERT failed  \"" _STR(m_cond) "\" is false."); \
+    } else                                                                           \
         ((void)0)
 #else
 #define DEV_ASSERT(m_cond)

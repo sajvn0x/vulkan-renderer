@@ -13,15 +13,14 @@ Error Engine::initialize() {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    Error err = driver_context.initialize();
-    ERR_FAIL_COND_V(err != OK, err);
-
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 
-    window =
-        glfwCreateWindow(mode->width, mode->height, APP_NAME, nullptr, nullptr);
-    ERR_FAIL_COND_V_MSG(window == nullptr, err, "Failed to create window");
+    window = glfwCreateWindow(mode->width, mode->height, APP_NAME, nullptr, nullptr);
+    ERR_FAIL_COND_V_MSG(window == nullptr, ERR_CANT_CREATE, "Failed to create window");
+
+    Error err = rendering_device.initialize();
+    ERR_FAIL_COND_V_MSG(err != OK, ERR_CANT_CREATE, "Failed to create rendering device");
 
     return OK;
 }

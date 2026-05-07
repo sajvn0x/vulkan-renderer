@@ -29,6 +29,10 @@ set(SOURCES
 
 	# renderer
 	src/renderer/driver_context.cc
+	src/renderer/driver_device.cc
+	src/renderer/rendering_device.cc
+
+	src/renderer/vma.cc
 )
 
 add_compile_options(-g)

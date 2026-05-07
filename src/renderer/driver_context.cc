@@ -9,8 +9,7 @@
 Error RenderingDriverContext::initialize() {
     Error err = OK;
 
-    ERR_FAIL_COND_V_MSG(volkInitialize() != VK_SUCCESS, FAILED,
-                        "Failed to load volk");
+    ERR_FAIL_COND_V_MSG(volkInitialize() != VK_SUCCESS, FAILED, "Failed to load volk");
 
     err = _initialize_vulkan_version();
     ERR_FAIL_COND_V(err != OK, err);
@@ -47,30 +46,26 @@ Error RenderingDriverContext::_initialize_instance_extensions() {
         glfwGetRequiredInstanceExtensions(&glfw_required_extension_count);
 
     for (int i = 0; i < glfw_required_extension_count; ++i) {
-        _register_requested_instance_extension(glfw_required_extensions[i],
-                                               true);
+        _register_requested_instance_extension(glfw_required_extensions[i], true);
     }
 
-    _register_requested_instance_extension(VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
+    _register_requested_instance_extension(VK_EXT_DEBUG_REPORT_EXTENSION_NAME, false);
+    _register_requested_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
                                            false);
-    _register_requested_instance_extension(
-        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, false);
-    _register_requested_instance_extension(
-        VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, false);
+    _register_requested_instance_extension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, false);
 
-    _register_requested_instance_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-                                           false);
+    _register_requested_instance_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, false);
 
     uint32_t instance_extension_count = 0;
-    VkResult err = vkEnumerateInstanceExtensionProperties(
-        nullptr, &instance_extension_count, nullptr);
+    VkResult err =
+        vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count, nullptr);
     ERR_FAIL_COND_V(err != VK_SUCCESS && err != VK_INCOMPLETE, ERR_CANT_CREATE);
     ERR_FAIL_COND_V_MSG(instance_extension_count == 0, ERR_CANT_CREATE,
                         "No instance extensions were found.");
 
     Vector<VkExtensionProperties> instance_extensions(instance_extension_count);
-    err = vkEnumerateInstanceExtensionProperties(
-        nullptr, &instance_extension_count, instance_extensions.data());
+    err = vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count,
+                                                 instance_extensions.data());
     if (err != VK_SUCCESS && err != VK_INCOMPLETE) {
         ERR_FAIL_V(ERR_CANT_CREATE);
     }
@@ -88,12 +83,10 @@ Error RenderingDriverContext::_initialize_instance_extensions() {
         const String& name = requested_extension.first;
         bool required = requested_extension.second;
 
-        if (enabled_instance_extension_names.find(name) ==
-            enabled_instance_extension_names.end()) {
+        if (enabled_instance_extension_names.find(name) == enabled_instance_extension_names.end()) {
             if (required) {
-                ERR_FAIL_V_MSG(ERR_CANT_CREATE, String("Required extension ") +
-                                                    name +
-                                                    String(" not found."));
+                ERR_FAIL_V_MSG(ERR_CANT_CREATE,
+                               String("Required extension ") + name + String(" not found."));
             }
         }
     }
@@ -105,15 +98,14 @@ Error RenderingDriverContext::_initialize_instance() {
     Vector<const char*> enabled_extension_names;
 
     uint32_t application_api_version =
-        instance_api_version == VK_API_VERSION_1_0 ? VK_API_VERSION_1_0
-                                                   : VK_API_VERSION_1_4;
+        instance_api_version == VK_API_VERSION_1_0 ? VK_API_VERSION_1_0 : VK_API_VERSION_1_4;
 
     VkApplicationInfo app_info = {};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app_info.pApplicationName = APP_NAME;
     app_info.pEngineName = APP_ENGINE_NAME;
-    app_info.engineVersion = VK_MAKE_VERSION(
-        APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_PATCH);
+    app_info.engineVersion =
+        VK_MAKE_VERSION(APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_PATCH);
     app_info.apiVersion = application_api_version;
 
     Vector<const char*> enabled_layer_names;
@@ -128,26 +120,23 @@ Error RenderingDriverContext::_initialize_instance() {
 
     VkResult result = vkCreateInstance(&instance_info, nullptr, &instance);
 
-    ERR_FAIL_COND_V_MSG(
-        result == VK_ERROR_INCOMPATIBLE_DRIVER, ERR_CANT_CREATE,
-        "Cannot find a compatible Vulkan installable client driver (ICD).\n\n"
-        "vkCreateInstance Failure");
-    ERR_FAIL_COND_V_MSG(result == VK_ERROR_EXTENSION_NOT_PRESENT,
-                        ERR_CANT_CREATE,
+    ERR_FAIL_COND_V_MSG(result == VK_ERROR_INCOMPATIBLE_DRIVER, ERR_CANT_CREATE,
+                        "Cannot find a compatible Vulkan installable client driver (ICD).\n\n"
+                        "vkCreateInstance Failure");
+    ERR_FAIL_COND_V_MSG(result == VK_ERROR_EXTENSION_NOT_PRESENT, ERR_CANT_CREATE,
                         "Cannot find a specified extension library.\n"
                         "Make sure your layers path is set appropriately.\n"
                         "vkCreateInstance Failure");
-    ERR_FAIL_COND_V_MSG(
-        result, ERR_CANT_CREATE,
-        "vkCreateInstance failed.\n\n"
-        "Do you have a compatible Vulkan installable client driver (ICD) "
-        "installed?\n");
+    ERR_FAIL_COND_V_MSG(result, ERR_CANT_CREATE,
+                        "vkCreateInstance failed.\n\n"
+                        "Do you have a compatible Vulkan installable client driver (ICD) "
+                        "installed?\n");
 
     return OK;
 }
 
-Error RenderingDriverContext::_register_requested_instance_extension(
-    const String& p_extension_name, bool p_required) {
+Error RenderingDriverContext::_register_requested_instance_extension(const String& p_extension_name,
+                                                                     bool p_required) {
     requested_instance_extensions[p_extension_name] = p_required;
 
     return OK;
@@ -155,20 +144,17 @@ Error RenderingDriverContext::_register_requested_instance_extension(
 
 Error RenderingDriverContext::_initialize_devices() {
     uint32_t physical_device_count = 0;
-    VkResult err =
-        vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
+    VkResult err = vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
     ERR_FAIL_COND_V(err != VK_SUCCESS, ERR_CANT_CREATE);
-    ERR_FAIL_COND_V_MSG(
-        physical_device_count == 0, ERR_CANT_CREATE,
-        "vkEnumeratePhysicalDevices reported zero accessible devices.\n\nDo "
-        "you have a compatible Vulkan installable client driver (ICD) "
-        "installed?\nvkEnumeratePhysicalDevices Failure.");
+    ERR_FAIL_COND_V_MSG(physical_device_count == 0, ERR_CANT_CREATE,
+                        "vkEnumeratePhysicalDevices reported zero accessible devices.\n\nDo "
+                        "you have a compatible Vulkan installable client driver (ICD) "
+                        "installed?\nvkEnumeratePhysicalDevices Failure.");
 
     driver_devices.resize(physical_device_count);
     physical_devices.resize(physical_device_count);
     device_queue_families.resize(physical_device_count);
-    err = vkEnumeratePhysicalDevices(instance, &physical_device_count,
-                                     physical_devices.data());
+    err = vkEnumeratePhysicalDevices(instance, &physical_device_count, physical_devices.data());
     ERR_FAIL_COND_V(err != VK_SUCCESS, ERR_CANT_CREATE);
 
     // Fill the list of driver devices with the properties from the physical
@@ -183,15 +169,14 @@ Error RenderingDriverContext::_initialize_devices() {
         driver_device.type = DeviceType(props.deviceType);
 
         uint32_t queue_family_properties_count = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(
-            physical_devices[i], &queue_family_properties_count, nullptr);
+        vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i],
+                                                 &queue_family_properties_count, nullptr);
 
         if (queue_family_properties_count > 0) {
-            device_queue_families[i].properties.resize(
-                queue_family_properties_count);
-            vkGetPhysicalDeviceQueueFamilyProperties(
-                physical_devices[i], &queue_family_properties_count,
-                device_queue_families[i].properties.data());
+            device_queue_families[i].properties.resize(queue_family_properties_count);
+            vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i],
+                                                     &queue_family_properties_count,
+                                                     device_queue_families[i].properties.data());
         }
     }
 
@@ -203,20 +188,16 @@ const Device& RenderingDriverContext::device_get(uint32_t p_device_index) {
     return driver_devices[p_device_index];
 }
 
-uint32_t RenderingDriverContext::device_get_count() const {
-    return driver_devices.size();
-}
+uint32_t RenderingDriverContext::device_get_count() const { return driver_devices.size(); }
 
 VkInstance RenderingDriverContext::instance_get() const { return instance; }
 
-VkPhysicalDevice RenderingDriverContext::physical_device_get(
-    uint32_t p_device_index) const {
+VkPhysicalDevice RenderingDriverContext::physical_device_get(uint32_t p_device_index) const {
     DEV_ASSERT(p_device_index < physical_devices.size());
     return physical_devices[p_device_index];
 }
 
-uint32_t RenderingDriverContext::queue_family_get_count(
-    uint32_t p_device_index) const {
+uint32_t RenderingDriverContext::queue_family_get_count(uint32_t p_device_index) const {
     DEV_ASSERT(p_device_index < physical_devices.size());
     return device_queue_families[p_device_index].properties.size();
 }
@@ -225,8 +206,7 @@ VkQueueFamilyProperties RenderingDriverContext::queue_family_get(
     uint32_t p_device_index, uint32_t p_queue_family_index) const {
     DEV_ASSERT(p_device_index < physical_devices.size());
     DEV_ASSERT(p_queue_family_index < queue_family_get_count(p_device_index));
-    return device_queue_families[p_device_index]
-        .properties[p_queue_family_index];
+    return device_queue_families[p_device_index].properties[p_queue_family_index];
 }
 
 RenderingDriverContext::RenderingDriverContext() {}
