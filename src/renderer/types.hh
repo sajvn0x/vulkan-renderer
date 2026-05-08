@@ -5,19 +5,17 @@
 #include <cstdint>
 
 #include "core/containers.hh"
+#include "core/traits.hh"
+#include "vma.hh"
 
 /* driver context */
 struct VulkanApiVersion {
     uint32_t api_version = VK_API_VERSION_1_0;
 
     bool supports(uint32_t version) const { return api_version >= version; }
-
     bool supports_vulkan_1_1() const { return supports(VK_API_VERSION_1_1); }
-
     bool supports_vulkan_1_2() const { return supports(VK_API_VERSION_1_2); }
-
     bool supports_vulkan_1_3() const { return supports(VK_API_VERSION_1_3); }
-
     bool supports_vulkan_1_4() const { return supports(VK_API_VERSION_1_4); }
 };
 
@@ -108,4 +106,39 @@ struct FragmentDensityMapCapabilities {
     bool non_subsampled_images_supported = false;
     bool invocations_supported = false;
     bool offset_supported = false;
+};
+
+/* buffers */
+struct Buffer : public RefTarget<Buffer> {
+    VkBuffer vk_buffer = VK_NULL_HANDLE;
+    struct {
+        VmaAllocation handle = nullptr;
+        uint64_t size = UINT64_MAX;
+    } allocation;
+    uint64_t size = 0;
+    VkBufferUsageFlags usage = 0;
+    VkBufferView vk_view = VK_NULL_HANDLE;
+    void *mapped_data = nullptr;
+};
+
+/* texture */
+struct TextureView {
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    VkComponentSwizzle swizzle_r = VK_COMPONENT_SWIZZLE_R;
+    VkComponentSwizzle swizzle_g = VK_COMPONENT_SWIZZLE_G;
+    VkComponentSwizzle swizzle_b = VK_COMPONENT_SWIZZLE_B;
+    VkComponentSwizzle swizzle_a = VK_COMPONENT_SWIZZLE_A;
+};
+
+struct Texture {
+    VkImage vk_image = VK_NULL_HANDLE;
+    VkImageView vk_image_view = VK_NULL_HANDLE;
+    VkFormat vk_format = VK_FORMAT_UNDEFINED;
+    VkImageCreateInfo vk_create_info = {};
+    VkImageViewCreateInfo vk_image_create_info = {};
+    struct {
+        VmaAllocation handle = nullptr;
+        VmaAllocationInfo info = {};
+    } allocation;
+    bool is_subsampled = false;
 };

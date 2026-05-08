@@ -4,7 +4,6 @@
 #include "core/error/error_list.hh"
 #include "driver_context.hh"
 #include "types.hh"
-#include "vma.hh"
 
 class RenderingDeviceDriver {
     struct CommandQueue;
@@ -64,6 +63,20 @@ class RenderingDeviceDriver {
     VmaAllocator allocator = nullptr;
 
    public:
+    /* buffers */
+    Ref<Buffer> buffer_create(uint64_t p_size, VkBufferUsageFlags p_usage,
+                              VmaMemoryUsage p_vma_usage);
+    void buffer_free(Ref<Buffer> p_buffer, VkFormat p_format);
+    uint64_t buffer_get_allocation_size(Ref<Buffer> p_buffer);
+    uint8_t *buffer_map(Ref<Buffer> p_buffer);
+    void buffer_unmap(Ref<Buffer> p_buffer);
+
+    /* texture */
+    Ref<Texture> texture_create();
+
+   public:
     RenderingDeviceDriver(RenderingDriverContext *p_context_driver);
     ~RenderingDeviceDriver();
 };
+
+using RDD = RenderingDeviceDriver;

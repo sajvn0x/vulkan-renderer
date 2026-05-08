@@ -637,6 +637,38 @@ Error RenderingDeviceDriver::_initialize_allocator() {
     return OK;
 }
 
+/* Buffer */
+Ref<Buffer> RenderingDeviceDriver::buffer_create(uint64_t p_size, VkBufferUsageFlags p_usage,
+                                                 VmaMemoryUsage p_vma_usage) {
+    Ref<Buffer> buffer = new Buffer();
+    buffer->size = p_size;
+
+    VkBufferCreateInfo buffer_info = {};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = p_size;
+    buffer_info.usage = p_usage;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo alloc_info = {};
+    alloc_info.usage = p_vma_usage;
+
+    VkResult result = vmaCreateBuffer(allocator, &buffer_info, &alloc_info, &buffer->vk_buffer,
+                                      &buffer->allocation.handle, nullptr);
+    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, nullptr, "Failed to create buffer");
+
+    return buffer;
+}
+
+void RenderingDeviceDriver::buffer_free(Ref<Buffer> p_buffer, VkFormat p_format) {
+    vmaDestroyBuffer(allocator, p_buffer->vk_buffer, p_buffer->allocation.handle);
+}
+
+uint64_t RenderingDeviceDriver::buffer_get_allocation_size(Ref<Buffer> p_buffer) { return 0; }
+
+uint8_t *RenderingDeviceDriver::buffer_map(Ref<Buffer> p_buffer) { return nullptr; }
+
+void RenderingDeviceDriver::buffer_unmap(Ref<Buffer> p_buffer) {}
+
 RenderingDeviceDriver::RenderingDeviceDriver(RenderingDriverContext *p_context_driver)
     : context_driver(p_context_driver) {}
 
