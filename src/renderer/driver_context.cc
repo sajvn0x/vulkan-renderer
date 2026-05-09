@@ -29,10 +29,10 @@ Error RenderingDriverContext::initialize() {
 }
 
 Error RenderingDriverContext::_initialize_vulkan_version() {
-    Error err = OK;
-    vkEnumerateInstanceVersion(&instance_api_version);
+    VkResult result = vkEnumerateInstanceVersion(&instance_api_version);
+    ERR_FAIL_COND_V(result != VK_SUCCESS, ERR_CANT_CREATE);
 
-    return err;
+    return OK;
 }
 
 Error RenderingDriverContext::_initialize_instance_extensions() {
@@ -86,7 +86,7 @@ Error RenderingDriverContext::_initialize_instance_extensions() {
         if (enabled_instance_extension_names.find(name) == enabled_instance_extension_names.end()) {
             if (required) {
                 ERR_FAIL_V_MSG(ERR_CANT_CREATE,
-                               String("Required extension ") + name + String(" not found."));
+                               ("Required extension " + name + " not found.").c_str());
             }
         }
     }

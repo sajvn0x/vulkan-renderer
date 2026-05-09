@@ -96,9 +96,8 @@ Error RenderingDeviceDriver::_initialize_device_extensions() {
         if (enabled_device_extension_names.find(extension) ==
             enabled_device_extension_names.end()) {
             if (required) {
-                ERR_FAIL_V_MSG(ERR_CANT_CREATE, String("Required extension ") +
-                                                    String::utf8(requested_extension.key) +
-                                                    String(" not found."));
+                ERR_FAIL_V_MSG(ERR_CANT_CREATE,
+                               ("Required extension" + extension + " not found.").c_str());
             }
         }
     }
@@ -637,7 +636,7 @@ Error RenderingDeviceDriver::_initialize_allocator() {
     return OK;
 }
 
-/* Buffer */
+/* buffer */
 Ref<Buffer> RenderingDeviceDriver::buffer_create(uint64_t p_size, VkBufferUsageFlags p_usage,
                                                  VmaMemoryUsage p_vma_usage) {
     Ref<Buffer> buffer = new Buffer();
