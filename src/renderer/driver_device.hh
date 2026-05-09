@@ -71,9 +71,6 @@ class RenderingDeviceDriver {
     uint8_t *buffer_map(Ref<Buffer> p_buffer);
     void buffer_unmap(Ref<Buffer> p_buffer);
 
-    /* texture */
-    Ref<Texture> texture_create();
-
    public:
     RenderingDeviceDriver(RenderingDriverContext *p_context_driver);
     ~RenderingDeviceDriver();
