@@ -11,7 +11,7 @@
 
 /* driver context */
 struct VulkanApiVersion {
-    uint32_t api_version = VK_API_VERSION_1_0;
+    uint32_t api_version = VK_API_VERSION_1_2;
 
     VulkanApiVersion(uint32_t p_api_version) : api_version(p_api_version) {}
     _ALWAYS_INLINE_ bool supports(uint32_t version) const { return api_version >= version; }

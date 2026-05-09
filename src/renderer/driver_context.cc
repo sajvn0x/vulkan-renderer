@@ -2,7 +2,6 @@
 
 #include <GLFW/glfw3.h>
 
-#include "core/containers.hh"
 #include "core/error/error_macros.hh"
 #include "version.hh"
 
@@ -40,8 +39,6 @@ Error RenderingDriverContext::_initialize_vulkan_version() {
 Error RenderingDriverContext::_initialize_instance_extensions() {
     enabled_instance_extension_names.clear();
 
-    _register_requested_instance_extension(VK_KHR_SURFACE_EXTENSION_NAME, true);
-
     // glfw required instance extensions
     uint32_t glfw_required_extension_count = 0;
     const char** glfw_required_extensions =
@@ -51,9 +48,8 @@ Error RenderingDriverContext::_initialize_instance_extensions() {
         _register_requested_instance_extension(glfw_required_extensions[i], true);
     }
 
+    _register_requested_instance_extension(VK_KHR_SURFACE_EXTENSION_NAME, true);
     _register_requested_instance_extension(VK_EXT_DEBUG_REPORT_EXTENSION_NAME, false);
-    _register_requested_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
-                                           false);
     _register_requested_instance_extension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, false);
     _register_requested_instance_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, false);
 
@@ -97,6 +93,11 @@ Error RenderingDriverContext::_initialize_instance_extensions() {
 
 Error RenderingDriverContext::_initialize_instance() {
     Vector<const char*> enabled_extension_names;
+    enabled_extension_names.reserve(enabled_instance_extension_names.size());
+
+    for (const String& ext_name : enabled_instance_extension_names) {
+        enabled_extension_names.push_back(ext_name.data());
+    }
 
     uint32_t application_api_version =
         instance_api_version.supports_vulkan_1_3() ? VK_API_VERSION_1_3 : VK_API_VERSION_1_2;
@@ -113,6 +114,7 @@ Error RenderingDriverContext::_initialize_instance() {
     enabled_layer_names.push_back("VK_LAYER_KHRONOS_validation");
 
     VkInstanceCreateInfo instance_info = {};
+    instance_info.pApplicationInfo = &app_info;
     instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instance_info.enabledExtensionCount = enabled_extension_names.size();
     instance_info.ppEnabledExtensionNames = enabled_extension_names.data();
