@@ -29,8 +29,10 @@ Error RenderingDriverContext::initialize() {
 }
 
 Error RenderingDriverContext::_initialize_vulkan_version() {
-    VkResult result = vkEnumerateInstanceVersion(&instance_api_version);
+    VkResult result = vkEnumerateInstanceVersion(&instance_api_version.api_version);
     ERR_FAIL_COND_V(result != VK_SUCCESS, ERR_CANT_CREATE);
+    ERR_FAIL_COND_V_MSG(!instance_api_version.supports_vulkan_1_2(), ERR_UNAVAILABLE,
+                        "Vulkan driver not supported. Vulkan 1.2 or higher is required");
 
     return OK;
 }
@@ -98,7 +100,7 @@ Error RenderingDriverContext::_initialize_instance() {
     Vector<const char*> enabled_extension_names;
 
     uint32_t application_api_version =
-        instance_api_version == VK_API_VERSION_1_0 ? VK_API_VERSION_1_0 : VK_API_VERSION_1_4;
+        instance_api_version.supports_vulkan_1_3() ? VK_API_VERSION_1_3 : VK_API_VERSION_1_2;
 
     VkApplicationInfo app_info = {};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;

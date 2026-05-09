@@ -2,8 +2,6 @@
 
 #include <volk.h>
 
-#include <cstdint>
-
 #include "core/containers.hh"
 #include "core/error/error_list.hh"
 #include "types.hh"
@@ -15,7 +13,7 @@ class RenderingDriverContext {
     };
 
     VkInstance instance = VK_NULL_HANDLE;
-    uint32_t instance_api_version = VK_API_VERSION_1_0;
+    VulkanApiVersion instance_api_version = VulkanApiVersion(VK_API_VERSION_1_2);
     HashMap<String, bool> requested_instance_extensions;
     HashSet<String> enabled_instance_extension_names;
     Vector<Device> driver_devices;

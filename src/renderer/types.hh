@@ -6,17 +6,18 @@
 
 #include "core/containers.hh"
 #include "core/traits.hh"
+#include "core/typedefs.hh"
 #include "vma.hh"
 
 /* driver context */
 struct VulkanApiVersion {
     uint32_t api_version = VK_API_VERSION_1_0;
 
-    bool supports(uint32_t version) const { return api_version >= version; }
-    bool supports_vulkan_1_1() const { return supports(VK_API_VERSION_1_1); }
-    bool supports_vulkan_1_2() const { return supports(VK_API_VERSION_1_2); }
-    bool supports_vulkan_1_3() const { return supports(VK_API_VERSION_1_3); }
-    bool supports_vulkan_1_4() const { return supports(VK_API_VERSION_1_4); }
+    VulkanApiVersion(uint32_t p_api_version) : api_version(p_api_version) {}
+    _ALWAYS_INLINE_ bool supports(uint32_t version) const { return api_version >= version; }
+    _ALWAYS_INLINE_ bool supports_vulkan_1_2() const { return supports(VK_API_VERSION_1_2); }
+    _ALWAYS_INLINE_ bool supports_vulkan_1_3() const { return supports(VK_API_VERSION_1_3); }
+    _ALWAYS_INLINE_ bool supports_vulkan_1_4() const { return supports(VK_API_VERSION_1_4); }
 };
 
 struct Vendor {
