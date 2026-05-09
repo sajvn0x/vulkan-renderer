@@ -1,6 +1,7 @@
 #include "driver_device.hh"
 
 #include "core/error/error_macros.hh"
+#include "renderer/types.hh"
 
 Error RenderingDeviceDriver::initialize(uint32_t p_device_index, uint32_t p_frame_count) {
     context_device = context_driver->device_get(p_device_index);
@@ -529,6 +530,39 @@ uint64_t RenderingDeviceDriver::buffer_get_allocation_size(Ref<Buffer> p_buffer)
 uint8_t *RenderingDeviceDriver::buffer_map(Ref<Buffer> p_buffer) { return nullptr; }
 
 void RenderingDeviceDriver::buffer_unmap(Ref<Buffer> p_buffer) {}
+
+/* sampler */
+Ref<Sampler> RenderingDeviceDriver::sampler_create(const SamplerState &p_state) {
+    VkSamplerCreateInfo sampler_ci = {};
+    sampler_ci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler_ci.pNext = nullptr;
+    sampler_ci.flags = 0;
+    sampler_ci.magFilter = p_state.mag_filter;
+    sampler_ci.minFilter = p_state.min_filter;
+    sampler_ci.mipmapMode = p_state.mip_filter;
+    sampler_ci.addressModeU = p_state.repeat_u;
+    sampler_ci.addressModeV = p_state.repeat_v;
+    sampler_ci.addressModeW = p_state.repeat_w;
+    sampler_ci.mipLodBias = p_state.lod_bias;
+    sampler_ci.anisotropyEnable =
+        p_state.use_anisotropy && (physical_device_features.samplerAnisotropy == VK_TRUE);
+    sampler_ci.maxAnisotropy = p_state.anisotropy_max;
+    sampler_ci.compareEnable = p_state.compare_op;
+    sampler_ci.minLod = p_state.min_lod;
+    sampler_ci.maxLod = p_state.max_lod;
+    sampler_ci.borderColor = p_state.border_color;
+    sampler_ci.unnormalizedCoordinates = p_state.unnormalized_uvw;
+
+    Ref<Sampler> sampler = new Sampler();
+    VkResult res = vkCreateSampler(vk_device, &sampler_ci, nullptr, &sampler->handle);
+    ERR_FAIL_COND_V_MSG(res != VK_SUCCESS, nullptr, "Couldn't create Vulkan sampler");
+
+    return sampler;
+}
+
+void RenderingDeviceDriver::sampler_free(Ref<Sampler> p_sampler) {
+    vkDestroySampler(vk_device, p_sampler->handle, nullptr);
+}
 
 RenderingDeviceDriver::RenderingDeviceDriver(RenderingDriverContext *p_context_driver)
     : context_driver(p_context_driver) {}

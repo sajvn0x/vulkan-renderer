@@ -71,6 +71,11 @@ class RenderingDeviceDriver {
     uint8_t *buffer_map(Ref<Buffer> p_buffer);
     void buffer_unmap(Ref<Buffer> p_buffer);
 
+    /* sampler */
+   public:
+    Ref<Sampler> sampler_create(const SamplerState &p_state);
+    void sampler_free(Ref<Sampler> p_sampler);
+
    public:
     RenderingDeviceDriver(RenderingDriverContext *p_context_driver);
     ~RenderingDeviceDriver();

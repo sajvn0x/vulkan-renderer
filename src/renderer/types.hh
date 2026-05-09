@@ -143,3 +143,26 @@ struct Texture {
     } allocation;
     bool is_subsampled = false;
 };
+
+/* sampler */
+struct Sampler {
+    VkSampler handle = VK_NULL_HANDLE;
+};
+
+struct SamplerState {
+    VkFilter mag_filter = VK_FILTER_LINEAR;
+    VkFilter min_filter = VK_FILTER_LINEAR;
+    VkSamplerMipmapMode mip_filter = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    VkSamplerAddressMode repeat_u = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    VkSamplerAddressMode repeat_v = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    VkSamplerAddressMode repeat_w = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    float lod_bias = 0.0f;
+    bool use_anisotropy = false;
+    float anisotropy_max = 1.0f;
+    bool enable_compare = false;
+    VkCompareOp compare_op = VK_COMPARE_OP_ALWAYS;
+    float min_lod = 0.0f;
+    float max_lod = 1e20;
+    VkBorderColor border_color = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    bool unnormalized_uvw = false;
+};
