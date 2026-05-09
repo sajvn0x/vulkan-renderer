@@ -24,8 +24,9 @@ class RenderingDriverContext {
 
     Error _initialize_vulkan_version();
     Error _initialize_instance_extensions();
+    _ALWAYS_INLINE_ void _register_requested_instance_extension(const String& p_extension_name,
+                                                                bool p_required);
     Error _initialize_instance();
-    Error _register_requested_instance_extension(const String& p_extension_name, bool p_required);
     Error _initialize_devices();
 
    public:

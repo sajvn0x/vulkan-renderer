@@ -47,7 +47,7 @@ Error RenderingDriverContext::_initialize_instance_extensions() {
     const char** glfw_required_extensions =
         glfwGetRequiredInstanceExtensions(&glfw_required_extension_count);
 
-    for (int i = 0; i < glfw_required_extension_count; ++i) {
+    for (uint32_t i = 0; i < glfw_required_extension_count; ++i) {
         _register_requested_instance_extension(glfw_required_extensions[i], true);
     }
 
@@ -55,7 +55,6 @@ Error RenderingDriverContext::_initialize_instance_extensions() {
     _register_requested_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
                                            false);
     _register_requested_instance_extension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, false);
-
     _register_requested_instance_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, false);
 
     uint32_t instance_extension_count = 0;
@@ -122,26 +121,18 @@ Error RenderingDriverContext::_initialize_instance() {
 
     VkResult result = vkCreateInstance(&instance_info, nullptr, &instance);
 
-    ERR_FAIL_COND_V_MSG(result == VK_ERROR_INCOMPATIBLE_DRIVER, ERR_CANT_CREATE,
-                        "Cannot find a compatible Vulkan installable client driver (ICD).\n\n"
-                        "vkCreateInstance Failure");
+    ERR_FAIL_COND_V_MSG(result == VK_ERROR_INCOMPATIBLE_DRIVER, ERR_UNAVAILABLE,
+                        "Unsupported Vulkan driver.");
     ERR_FAIL_COND_V_MSG(result == VK_ERROR_EXTENSION_NOT_PRESENT, ERR_CANT_CREATE,
-                        "Cannot find a specified extension library.\n"
-                        "Make sure your layers path is set appropriately.\n"
-                        "vkCreateInstance Failure");
-    ERR_FAIL_COND_V_MSG(result, ERR_CANT_CREATE,
-                        "vkCreateInstance failed.\n\n"
-                        "Do you have a compatible Vulkan installable client driver (ICD) "
-                        "installed?\n");
+                        "Required Vulkan extensions are not available.");
+    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, ERR_CANT_CREATE, "Failed to create Vulkan instance.");
 
     return OK;
 }
 
-Error RenderingDriverContext::_register_requested_instance_extension(const String& p_extension_name,
-                                                                     bool p_required) {
+void RenderingDriverContext::_register_requested_instance_extension(const String& p_extension_name,
+                                                                    bool p_required) {
     requested_instance_extensions[p_extension_name] = p_required;
-
-    return OK;
 }
 
 Error RenderingDriverContext::_initialize_devices() {
@@ -149,9 +140,7 @@ Error RenderingDriverContext::_initialize_devices() {
     VkResult err = vkEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
     ERR_FAIL_COND_V(err != VK_SUCCESS, ERR_CANT_CREATE);
     ERR_FAIL_COND_V_MSG(physical_device_count == 0, ERR_CANT_CREATE,
-                        "vkEnumeratePhysicalDevices reported zero accessible devices.\n\nDo "
-                        "you have a compatible Vulkan installable client driver (ICD) "
-                        "installed?\nvkEnumeratePhysicalDevices Failure.");
+                        "No Vulkan-compatible physical devices found");
 
     driver_devices.resize(physical_device_count);
     physical_devices.resize(physical_device_count);
