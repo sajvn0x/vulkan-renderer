@@ -131,7 +131,50 @@ struct TextureView {
     VkComponentSwizzle swizzle_a = VK_COMPONENT_SWIZZLE_A;
 };
 
-struct Texture {
+struct TextureFormat {
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    uint32_t width = 1;
+    uint32_t height = 1;
+    uint32_t depth = 1;
+    uint32_t array_layers = 1;
+    uint32_t mipmaps = 1;
+    VkImageType texture_type = VK_IMAGE_TYPE_2D;
+    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+    uint32_t usage_bits = 0;
+    bool is_resolve_buffer = false;
+    bool is_discardable = false;
+    bool is_subsampled = false;
+
+    bool operator==(const TextureFormat &b) const {
+        if (format != b.format) {
+            return false;
+        } else if (width != b.width) {
+            return false;
+        } else if (height != b.height) {
+            return false;
+        } else if (depth != b.depth) {
+            return false;
+        } else if (array_layers != b.array_layers) {
+            return false;
+        } else if (mipmaps != b.mipmaps) {
+            return false;
+        } else if (texture_type != b.texture_type) {
+            return false;
+        } else if (samples != b.samples) {
+            return false;
+        } else if (usage_bits != b.usage_bits) {
+            return false;
+        } else if (is_resolve_buffer != b.is_resolve_buffer) {
+            return false;
+        } else if (is_discardable != b.is_discardable) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+};
+
+struct Texture : RefTarget<Texture> {
     VkImage vk_image = VK_NULL_HANDLE;
     VkImageView vk_image_view = VK_NULL_HANDLE;
     VkFormat vk_format = VK_FORMAT_UNDEFINED;

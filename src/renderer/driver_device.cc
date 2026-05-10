@@ -531,6 +531,61 @@ uint8_t *RenderingDeviceDriver::buffer_map(Ref<Buffer> p_buffer) { return nullpt
 
 void RenderingDeviceDriver::buffer_unmap(Ref<Buffer> p_buffer) {}
 
+/* texture */
+Ref<Texture> RenderingDeviceDriver::texture_create(const TextureFormat &p_format,
+                                                   const TextureView &p_view) {
+    Ref<Texture> texture = new Texture();
+
+    VkImageCreateInfo create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+
+    create_info.imageType = p_format.texture_type;
+    create_info.format = p_format.format;
+
+    create_info.extent.width = p_format.width;
+    create_info.extent.height = p_format.height;
+    create_info.extent.depth = p_format.depth;
+
+    create_info.mipLevels = p_format.mipmaps;
+    create_info.arrayLayers = p_format.array_layers;
+
+    create_info.samples = p_format.samples;
+    create_info.tiling = VK_IMAGE_TILING_LINEAR;
+
+    create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VkResult err = vkCreateImage(vk_device, &create_info, nullptr, &texture->vk_image);
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr, "Failed to create image");
+
+    // image view
+    VkImageViewCreateInfo image_view_create_info = {};
+    image_view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    image_view_create_info.image = texture->vk_image;
+    image_view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    image_view_create_info.format = p_format.format;
+    image_view_create_info.components.r = p_view.swizzle_r;
+    image_view_create_info.components.g = p_view.swizzle_g;
+    image_view_create_info.components.b = p_view.swizzle_b;
+    image_view_create_info.components.a = p_view.swizzle_a;
+    image_view_create_info.subresourceRange.levelCount = create_info.mipLevels;
+    image_view_create_info.subresourceRange.layerCount = create_info.arrayLayers;
+    image_view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+    err = vkCreateImageView(vk_device, &image_view_create_info, nullptr, &texture->vk_image_view);
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr, "Failed to create image views");
+
+    return texture;
+}
+
+void RenderingDeviceDriver::texture_free(Ref<Texture> p_texture) {
+    vkDestroyImageView(vk_device, p_texture->vk_image_view, nullptr);
+    if (p_texture->allocation.handle) {
+        vkDestroyImage(vk_device, p_texture->vk_image, nullptr);
+        vmaFreeMemory(allocator, p_texture->allocation.handle);
+    }
+}
+
 /* sampler */
 Ref<Sampler> RenderingDeviceDriver::sampler_create(const SamplerState &p_state) {
     VkSamplerCreateInfo sampler_ci = {};

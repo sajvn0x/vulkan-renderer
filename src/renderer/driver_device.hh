@@ -71,6 +71,11 @@ class RenderingDeviceDriver {
     uint8_t *buffer_map(Ref<Buffer> p_buffer);
     void buffer_unmap(Ref<Buffer> p_buffer);
 
+    /* texture */
+   public:
+    Ref<Texture> texture_create(const TextureFormat &p_format, const TextureView &p_view);
+    void texture_free(Ref<Texture> p_texture);
+
     /* sampler */
    public:
     Ref<Sampler> sampler_create(const SamplerState &p_state);
