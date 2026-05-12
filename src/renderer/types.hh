@@ -188,7 +188,7 @@ struct Texture : RefTarget<Texture> {
 };
 
 /* sampler */
-struct Sampler {
+struct Sampler : RefTarget<Sampler> {
     VkSampler handle = VK_NULL_HANDLE;
 };
 
