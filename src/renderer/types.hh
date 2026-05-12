@@ -209,3 +209,8 @@ struct SamplerState {
     VkBorderColor border_color = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
     bool unnormalized_uvw = false;
 };
+
+/* fence */
+struct Fence : RefTarget<Fence> {
+    VkFence vk_fence = VK_NULL_HANDLE;
+};

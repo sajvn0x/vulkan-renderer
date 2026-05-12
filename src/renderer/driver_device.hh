@@ -81,6 +81,11 @@ class RenderingDeviceDriver {
     Ref<Sampler> sampler_create(const SamplerState &p_state);
     void sampler_free(Ref<Sampler> p_sampler);
 
+    /* fence */
+    Ref<Fence> fence_create();
+    Error fence_wait(Ref<Fence> p_fence);
+    void fence_free(Ref<Fence> p_fence);
+
    public:
     RenderingDeviceDriver(RenderingDriverContext *p_context_driver);
     ~RenderingDeviceDriver();

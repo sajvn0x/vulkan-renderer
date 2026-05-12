@@ -1,7 +1,10 @@
 #include "driver_device.hh"
 
+#include <cwchar>
+
 #include "core/error/error_macros.hh"
 #include "renderer/types.hh"
+#include "vulkan/vulkan_core.h"
 
 Error RenderingDeviceDriver::initialize(uint32_t p_device_index, uint32_t p_frame_count) {
     context_device = context_driver->device_get(p_device_index);
@@ -613,6 +616,39 @@ Ref<Sampler> RenderingDeviceDriver::sampler_create(const SamplerState &p_state) 
     ERR_FAIL_COND_V_MSG(res != VK_SUCCESS, nullptr, "Couldn't create Vulkan sampler");
 
     return sampler;
+}
+
+/* fence */
+Ref<Fence> RenderingDeviceDriver::fence_create() {
+    Ref<Fence> fence = new Fence();
+
+    VkFenceCreateInfo fence_create_info = {};
+    fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fence_create_info.pNext = nullptr;
+    fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    VkResult result = vkCreateFence(vk_device, &fence_create_info, nullptr, &fence->vk_fence);
+
+    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, nullptr, "Couldn't create vulkan fence");
+
+    return fence;
+}
+
+Error RenderingDeviceDriver::fence_wait(Ref<Fence> p_fence) {
+    VkResult fence_status = vkGetFenceStatus(vk_device, p_fence->vk_fence);
+    if (fence_status == VK_NOT_READY) {
+        VkResult err = vkWaitForFences(vk_device, 1, &p_fence->vk_fence, VK_TRUE, UINT64_MAX);
+        ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, FAILED, "Couldn't wait for Vulkan fence");
+    }
+
+    VkResult err = vkResetFences(vk_device, 1, &p_fence->vk_fence);
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, FAILED, "Couldn't reset Vulkan fence");
+
+    return OK;
+}
+
+void RenderingDeviceDriver::fence_free(Ref<Fence> p_fence) {
+    vkDestroyFence(vk_device, p_fence->vk_fence, nullptr);
 }
 
 void RenderingDeviceDriver::sampler_free(Ref<Sampler> p_sampler) {
