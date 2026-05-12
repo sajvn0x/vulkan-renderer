@@ -214,3 +214,8 @@ struct SamplerState {
 struct Fence : RefTarget<Fence> {
     VkFence vk_fence = VK_NULL_HANDLE;
 };
+
+/* semaphore */
+struct Semaphore : RefTarget<Semaphore> {
+    VkSemaphore vk_semaphore = VK_NULL_HANDLE;
+};

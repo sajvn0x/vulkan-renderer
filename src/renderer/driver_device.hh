@@ -86,6 +86,10 @@ class RenderingDeviceDriver {
     Error fence_wait(Ref<Fence> p_fence);
     void fence_free(Ref<Fence> p_fence);
 
+    /* semaphore */
+    Ref<Semaphore> semaphore_create();
+    void semaphore_free(Ref<Semaphore> p_semaphore);
+
    public:
     RenderingDeviceDriver(RenderingDriverContext *p_context_driver);
     ~RenderingDeviceDriver();

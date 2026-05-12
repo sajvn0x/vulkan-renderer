@@ -618,6 +618,10 @@ Ref<Sampler> RenderingDeviceDriver::sampler_create(const SamplerState &p_state) 
     return sampler;
 }
 
+void RenderingDeviceDriver::sampler_free(Ref<Sampler> p_sampler) {
+    vkDestroySampler(vk_device, p_sampler->handle, nullptr);
+}
+
 /* fence */
 Ref<Fence> RenderingDeviceDriver::fence_create() {
     Ref<Fence> fence = new Fence();
@@ -651,8 +655,21 @@ void RenderingDeviceDriver::fence_free(Ref<Fence> p_fence) {
     vkDestroyFence(vk_device, p_fence->vk_fence, nullptr);
 }
 
-void RenderingDeviceDriver::sampler_free(Ref<Sampler> p_sampler) {
-    vkDestroySampler(vk_device, p_sampler->handle, nullptr);
+/* semaphore */
+Ref<Semaphore> RenderingDeviceDriver::semaphore_create() {
+    Ref<Semaphore> semaphore = new Semaphore();
+
+    VkSemaphoreCreateInfo semaphore_create_info = {};
+    semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    VkResult err =
+        vkCreateSemaphore(vk_device, &semaphore_create_info, nullptr, &semaphore->vk_semaphore);
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr, "Couldn't create Vulkan semaphore");
+
+    return semaphore;
+}
+
+void RenderingDeviceDriver::semaphore_free(Ref<Semaphore> p_semaphore) {
+    vkDestroySemaphore(vk_device, p_semaphore->vk_semaphore, nullptr);
 }
 
 RenderingDeviceDriver::RenderingDeviceDriver(RenderingDriverContext *p_context_driver)
