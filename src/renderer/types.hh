@@ -232,3 +232,15 @@ struct Fence : RefTarget<Fence> {
 struct Semaphore : RefTarget<Semaphore> {
     VkSemaphore vk_semaphore = VK_NULL_HANDLE;
 };
+
+/* commands */
+struct CommandBuffer : RefTarget<CommandBuffer> {
+    VkCommandBuffer vk_command_buffer = VK_NULL_HANDLE;
+    Framebuffer *active_framebuffer = nullptr;
+};
+
+struct CommandPool : RefTarget<CommandPool> {
+    VkCommandPool vk_command_pool = VK_NULL_HANDLE;
+    Vector<Ref<CommandBuffer>> command_buffers_created;
+    VkCommandBufferLevel command_buffer_level;
+};

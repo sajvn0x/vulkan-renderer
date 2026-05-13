@@ -1,7 +1,5 @@
 #include "driver_device.hh"
 
-#include <cwchar>
-
 #include "core/error/error_macros.hh"
 #include "renderer/types.hh"
 #include "vulkan/vulkan_core.h"
@@ -701,6 +699,98 @@ Ref<Framebuffer> RenderingDeviceDriver::framebuffer_create(Ref<RenderPass> p_ren
 
 void RenderingDeviceDriver::framebuffer_free(Ref<Framebuffer> p_framebuffer) {
     vkDestroyFramebuffer(vk_device, p_framebuffer->vk_framebuffer, nullptr);
+}
+
+/* commands */
+// command pool
+Ref<CommandPool> RenderingDeviceDriver::command_pool_create(uint32_t queue_family_index,
+                                                            VkCommandBufferLevel cmd_buffer_level) {
+    Ref<CommandPool> cmd_pool = new CommandPool();
+
+    VkCommandPoolCreateInfo cmd_pool_info = {};
+    cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    cmd_pool_info.queueFamilyIndex = queue_family_index;
+    // enable command buffer reset
+    cmd_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+    VkResult res =
+        vkCreateCommandPool(vk_device, &cmd_pool_info, nullptr, &cmd_pool->vk_command_pool);
+    ERR_FAIL_COND_V_MSG(res, nullptr, "Couldn't create Vulkan command pool");
+
+    return cmd_pool;
+}
+
+bool RenderingDeviceDriver::command_pool_reset(Ref<CommandPool> p_cmd_pool) {
+    VkResult err = vkResetCommandPool(vk_device, p_cmd_pool->vk_command_pool, 0);
+    ERR_FAIL_COND_V_MSG(err, false, "Couldn't reset Vulkan command pool");
+
+    return true;
+}
+
+void RenderingDeviceDriver::command_pool_free(Ref<CommandPool> p_cmd_pool) {
+    vkDestroyCommandPool(vk_device, p_cmd_pool->vk_command_pool, nullptr);
+}
+
+// command buffer
+Ref<CommandBuffer> RenderingDeviceDriver::command_buffer_create(Ref<CommandPool> p_cmd_pool) {
+    Ref<CommandBuffer> command_buffer = new CommandBuffer();
+
+    VkCommandBufferAllocateInfo cmd_buf_info = {};
+    cmd_buf_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmd_buf_info.commandPool = p_cmd_pool->vk_command_pool;
+    cmd_buf_info.commandBufferCount = 1;
+
+    if (p_cmd_pool->command_buffer_level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+        cmd_buf_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    } else {
+        cmd_buf_info.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+    };
+
+    VkResult err =
+        vkAllocateCommandBuffers(vk_device, &cmd_buf_info, &command_buffer->vk_command_buffer);
+    ERR_FAIL_COND_V_MSG(err, nullptr, "Couldn't allocate Vulkan command buffer");
+
+    return command_buffer;
+}
+
+bool RenderingDeviceDriver::command_buffer_begin(Ref<CommandBuffer> p_cmd_buffer) {
+    VkCommandBufferBeginInfo cmd_buf_begin_info = {};
+    cmd_buf_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cmd_buf_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    VkResult err = vkBeginCommandBuffer(p_cmd_buffer->vk_command_buffer, &cmd_buf_begin_info);
+    ERR_FAIL_COND_V_MSG(err, false, "Couldn't begin Vulkan command buffer");
+
+    return true;
+}
+
+bool RenderingDeviceDriver::command_buffer_begin_secondary(Ref<CommandBuffer> p_cmd_buffer) {
+    VkCommandBufferBeginInfo cmd_buf_begin_info = {};
+    cmd_buf_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cmd_buf_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT |
+                               VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
+
+    VkResult err = vkBeginCommandBuffer(p_cmd_buffer->vk_command_buffer, &cmd_buf_begin_info);
+    ERR_FAIL_COND_V_MSG(err, false, "Couldn't begin Vulkan command buffer");
+
+    return true;
+}
+
+void RenderingDeviceDriver::command_buffer_end(Ref<CommandBuffer> p_cmd_buffer) {
+    vkEndCommandBuffer(p_cmd_buffer->vk_command_buffer);
+}
+
+void RenderingDeviceDriver::command_buffer_execute_secondary(
+    Ref<CommandBuffer> p_cmd_buffer, Vector<Ref<CommandBuffer>> p_secondary_cmd_buffers) {
+    Vector<VkCommandBuffer> secondary_command_buffers;
+    secondary_command_buffers.resize(p_secondary_cmd_buffers.size());
+
+    for (uint32_t i = 0; i < p_secondary_cmd_buffers.size(); i++) {
+        secondary_command_buffers[i] = p_secondary_cmd_buffers[i]->vk_command_buffer;
+    }
+
+    vkCmdExecuteCommands(p_cmd_buffer->vk_command_buffer, p_secondary_cmd_buffers.size(),
+                         secondary_command_buffers.data());
 }
 
 RenderingDeviceDriver::RenderingDeviceDriver(RenderingDriverContext *p_context_driver)

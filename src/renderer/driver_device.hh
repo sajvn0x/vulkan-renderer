@@ -90,6 +90,21 @@ class RenderingDeviceDriver {
     Ref<Semaphore> semaphore_create();
     void semaphore_free(Ref<Semaphore> p_semaphore);
 
+    /* commands */
+    // command pool
+    Ref<CommandPool> command_pool_create(uint32_t queue_family_index,
+                                         VkCommandBufferLevel cmd_buffer_level);
+    bool command_pool_reset(Ref<CommandPool> p_cmd_pool);
+    void command_pool_free(Ref<CommandPool> p_cmd_pool);
+
+    // command buffer
+    Ref<CommandBuffer> command_buffer_create(Ref<CommandPool> p_cmd_pool);
+    bool command_buffer_begin(Ref<CommandBuffer> p_cmd_buffer);
+    bool command_buffer_begin_secondary(Ref<CommandBuffer> p_cmd_buffer);
+    void command_buffer_end(Ref<CommandBuffer> p_cmd_buffer);
+    void command_buffer_execute_secondary(Ref<CommandBuffer> p_cmd_buffer,
+                                          Vector<Ref<CommandBuffer>> p_secondary_cmd_buffers);
+
    public:
     RenderingDeviceDriver(RenderingDriverContext *p_context_driver);
     ~RenderingDeviceDriver();
