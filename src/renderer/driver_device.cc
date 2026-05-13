@@ -672,6 +672,37 @@ void RenderingDeviceDriver::semaphore_free(Ref<Semaphore> p_semaphore) {
     vkDestroySemaphore(vk_device, p_semaphore->vk_semaphore, nullptr);
 }
 
+Ref<Framebuffer> RenderingDeviceDriver::framebuffer_create(Ref<RenderPass> p_render_pass,
+                                                           Vector<Ref<Texture>> p_attachments,
+                                                           uint32_t p_width, uint32_t p_height) {
+    Ref<Framebuffer> framebuffer = new Framebuffer();
+
+    Vector<VkImageView> vk_image_views(p_attachments.size());
+
+    for (uint32_t i = 0; i < p_attachments.size(); ++i) {
+        vk_image_views[i] = p_attachments[i]->vk_image_view;
+    }
+
+    VkFramebufferCreateInfo framebuffer_create_info = {};
+    framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebuffer_create_info.renderPass = p_render_pass->vk_render_pass;
+    framebuffer_create_info.attachmentCount = p_attachments.size();
+    framebuffer_create_info.pAttachments = vk_image_views.data();
+    framebuffer_create_info.width = p_width;
+    framebuffer_create_info.height = p_height;
+    framebuffer_create_info.layers = 1;
+
+    VkResult err = vkCreateFramebuffer(vk_device, &framebuffer_create_info, nullptr,
+                                       &framebuffer->vk_framebuffer);
+    ERR_FAIL_COND_V_MSG(err, nullptr, "Couldn't create Vulkan framebuffer");
+
+    return framebuffer;
+}
+
+void RenderingDeviceDriver::framebuffer_free(Ref<Framebuffer> p_framebuffer) {
+    vkDestroyFramebuffer(vk_device, p_framebuffer->vk_framebuffer, nullptr);
+}
+
 RenderingDeviceDriver::RenderingDeviceDriver(RenderingDriverContext *p_context_driver)
     : context_driver(p_context_driver) {}
 

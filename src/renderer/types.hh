@@ -109,6 +109,19 @@ struct FragmentDensityMapCapabilities {
     bool offset_supported = false;
 };
 
+/* render pass */
+struct RenderPass : RefTarget<RenderPass> {
+    VkRenderPass vk_render_pass = VK_NULL_HANDLE;
+};
+
+/* framebuffer */
+struct Framebuffer : RefTarget<Framebuffer> {
+    VkFramebuffer vk_framebuffer = VK_NULL_HANDLE;
+    VkImage swap_chain_image = VK_NULL_HANDLE;
+    VkImageSubresourceRange swap_chain_image_subresource_range = {};
+    bool swap_chain_acquired = false;
+};
+
 /* buffers */
 struct Buffer : public RefTarget<Buffer> {
     VkBuffer vk_buffer = VK_NULL_HANDLE;

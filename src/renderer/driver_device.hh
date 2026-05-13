@@ -6,12 +6,6 @@
 #include "types.hh"
 
 class RenderingDeviceDriver {
-    struct CommandQueue;
-    struct SwapChain;
-    struct CommandBufferInfo;
-    struct RenderPassInfo;
-    struct FrameBuffer;
-
     struct Queue {
         VkQueue queue = VK_NULL_HANDLE;
         uint32_t virtual_count = 0;
@@ -80,6 +74,12 @@ class RenderingDeviceDriver {
    public:
     Ref<Sampler> sampler_create(const SamplerState &p_state);
     void sampler_free(Ref<Sampler> p_sampler);
+
+    /* framebuffer */
+    Ref<Framebuffer> framebuffer_create(Ref<RenderPass> p_render_pass,
+                                        Vector<Ref<Texture>> p_attachments, uint32_t p_width,
+                                        uint32_t p_height);
+    void framebuffer_free(Ref<Framebuffer> p_framebuffer);
 
     /* fence */
     Ref<Fence> fence_create();
