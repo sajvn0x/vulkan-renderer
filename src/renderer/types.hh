@@ -9,6 +9,8 @@
 #include "core/typedefs.hh"
 #include "vma.hh"
 
+struct Framebuffer;
+
 /* driver context */
 struct VulkanApiVersion {
     uint32_t api_version = VK_API_VERSION_1_2;
@@ -107,19 +109,6 @@ struct FragmentDensityMapCapabilities {
     bool non_subsampled_images_supported = false;
     bool invocations_supported = false;
     bool offset_supported = false;
-};
-
-/* render pass */
-struct RenderPass : RefTarget<RenderPass> {
-    VkRenderPass vk_render_pass = VK_NULL_HANDLE;
-};
-
-/* framebuffer */
-struct Framebuffer : RefTarget<Framebuffer> {
-    VkFramebuffer vk_framebuffer = VK_NULL_HANDLE;
-    VkImage swap_chain_image = VK_NULL_HANDLE;
-    VkImageSubresourceRange swap_chain_image_subresource_range = {};
-    bool swap_chain_acquired = false;
 };
 
 /* buffers */
@@ -243,4 +232,48 @@ struct CommandPool : RefTarget<CommandPool> {
     VkCommandPool vk_command_pool = VK_NULL_HANDLE;
     Vector<Ref<CommandBuffer>> command_buffers_created;
     VkCommandBufferLevel command_buffer_level;
+};
+
+/* render pass */
+struct RenderPass : RefTarget<RenderPass> {
+    VkRenderPass vk_render_pass = VK_NULL_HANDLE;
+};
+
+struct Attachment {
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM;
+    VkAttachmentLoadOp load_op = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    VkAttachmentStoreOp store_op = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    VkAttachmentLoadOp stencil_load_op = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    VkAttachmentStoreOp stencil_store_op = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    VkImageLayout initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VkImageLayout final_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+};
+
+struct Subpass {
+    Vector<VkAttachmentReference2> input_references;
+    Vector<VkAttachmentReference2> color_references;
+    VkAttachmentReference2 depth_stencil_reference;
+    VkAttachmentReference2 depth_resolve_reference;
+    Vector<VkAttachmentReference2> resolve_references;
+    Vector<uint32_t> preserve_attachments;
+    VkAttachmentReference2 fragment_shading_rate_reference;
+    Size2i fragment_shading_rate_texel_size;
+};
+
+struct SubpassDependency {
+    uint32_t src_subpass = 0xffffffff;
+    uint32_t dst_subpass = 0xffffffff;
+    VkPipelineStageFlags src_stages = {};
+    VkPipelineStageFlags dst_stages = {};
+    VkAccessFlags src_access = {};
+    VkAccessFlags dst_access = {};
+};
+
+/* framebuffer */
+struct Framebuffer : RefTarget<Framebuffer> {
+    VkFramebuffer vk_framebuffer = VK_NULL_HANDLE;
+    VkImage swap_chain_image = VK_NULL_HANDLE;
+    VkImageSubresourceRange swap_chain_image_subresource_range = {};
+    bool swap_chain_acquired = false;
 };

@@ -75,6 +75,27 @@ class RenderingDeviceDriver {
     Ref<Sampler> sampler_create(const SamplerState &p_state);
     void sampler_free(Ref<Sampler> p_sampler);
 
+   public:
+    /* render pass */
+    Ref<RenderPass> render_pass_create(Vector<Attachment> &p_attachments,
+                                       Vector<Subpass> &p_subpasses,
+                                       Vector<SubpassDependency> &p_subpass_dependencies);
+    void render_pass_free(Ref<RenderPass> p_render_pass);
+
+    // commands
+    void command_begin_render_pass(Ref<CommandBuffer> p_cmd_buffer, Ref<RenderPass> p_render_pass,
+                                   Ref<Framebuffer> p_framebuffer, VkCommandBufferLevel p_cmd_level,
+                                   const VkRect2D &p_rect, Vector<VkClearValue> p_clear_values);
+    void command_end_render_pass(Ref<CommandBuffer> p_cmd_buffer);
+    void command_next_render_subpass(Ref<CommandBuffer> p_cmd_buffer,
+                                     VkCommandBufferLevel p_cmd_level);
+    void command_render_set_viewport(Ref<CommandBuffer> p_cmd_buffer, Vector<VkRect2D> p_viewports);
+    void command_render_set_scissor(Ref<CommandBuffer> p_cmd_buffer, Vector<VkRect2D> p_scissors);
+    void command_render_clear_attachments(Ref<CommandBuffer> p_cmd_buffer,
+                                          Vector<VkClearAttachment> p_attachment_clears,
+                                          Vector<VkRect2D> p_rects);
+
+   public:
     /* framebuffer */
     Ref<Framebuffer> framebuffer_create(Ref<RenderPass> p_render_pass,
                                         Vector<Ref<Texture>> p_attachments, uint32_t p_width,

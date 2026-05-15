@@ -670,6 +670,156 @@ void RenderingDeviceDriver::semaphore_free(Ref<Semaphore> p_semaphore) {
     vkDestroySemaphore(vk_device, p_semaphore->vk_semaphore, nullptr);
 }
 
+// render pass
+Ref<RenderPass> RenderingDeviceDriver::render_pass_create(
+    Vector<Attachment> &p_attachments, Vector<Subpass> &p_subpasses,
+    Vector<SubpassDependency> &p_subpass_dependencies) {
+    Ref<RenderPass> render_pass = new RenderPass();
+
+    Vector<VkAttachmentDescription2> vk_attachments(p_attachments.size());
+
+    for (uint32_t i = 0; i < p_attachments.size(); i++) {
+        vk_attachments[i] = {};
+        vk_attachments[i].sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
+        vk_attachments[i].pNext = nullptr;
+        vk_attachments[i].flags = 0;
+        vk_attachments[i].format = p_attachments[i].format;
+        vk_attachments[i].samples = p_attachments[i].samples;
+        vk_attachments[i].loadOp = p_attachments[i].load_op;
+        vk_attachments[i].storeOp = p_attachments[i].store_op;
+        vk_attachments[i].stencilLoadOp = p_attachments[i].stencil_load_op;
+        vk_attachments[i].stencilStoreOp = p_attachments[i].stencil_store_op;
+        vk_attachments[i].initialLayout = p_attachments[i].initial_layout;
+        vk_attachments[i].finalLayout = p_attachments[i].final_layout;
+    }
+
+    Vector<VkSubpassDescription2> vk_subpasses(p_subpasses.size());
+    for (uint32_t i = 0; i < p_subpasses.size(); i++) {
+        vk_subpasses[i] = {};
+        vk_subpasses[i].sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2;
+        vk_subpasses[i].pNext = nullptr;
+        vk_subpasses[i].flags = 0;
+        vk_subpasses[i].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        vk_subpasses[i].viewMask = 0;
+        vk_subpasses[i].inputAttachmentCount = p_subpasses[i].input_references.size();
+        vk_subpasses[i].pInputAttachments = p_subpasses[i].input_references.data();
+        vk_subpasses[i].colorAttachmentCount = p_subpasses[i].color_references.size();
+        vk_subpasses[i].pColorAttachments = p_subpasses[i].color_references.data();
+        vk_subpasses[i].pResolveAttachments = p_subpasses[i].resolve_references.data();
+        vk_subpasses[i].pDepthStencilAttachment = &p_subpasses[i].depth_stencil_reference;
+        vk_subpasses[i].preserveAttachmentCount = p_subpasses[i].preserve_attachments.size();
+        vk_subpasses[i].pPreserveAttachments = p_subpasses[i].preserve_attachments.data();
+    }
+
+    Vector<VkSubpassDependency2> vk_subpass_dependencies(p_attachments.size());
+    for (uint32_t i = 0; i < p_subpass_dependencies.size(); i++) {
+        vk_subpass_dependencies[i] = {};
+        vk_subpass_dependencies[i].sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2;
+        vk_subpass_dependencies[i].pNext = nullptr;
+        vk_subpass_dependencies[i].srcSubpass = p_subpass_dependencies[i].src_subpass;
+        vk_subpass_dependencies[i].dstSubpass = p_subpass_dependencies[i].dst_subpass;
+        vk_subpass_dependencies[i].srcStageMask = p_subpass_dependencies[i].src_stages;
+        vk_subpass_dependencies[i].dstStageMask = p_subpass_dependencies[i].dst_stages;
+        vk_subpass_dependencies[i].srcAccessMask = p_subpass_dependencies[i].src_access;
+        vk_subpass_dependencies[i].dstAccessMask = p_subpass_dependencies[i].dst_access;
+        vk_subpass_dependencies[i].dependencyFlags = 0;
+        vk_subpass_dependencies[i].viewOffset = 0;
+    }
+
+    VkRenderPassCreateInfo2 create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2;
+    create_info.pNext = nullptr;
+    create_info.flags = 0;
+    create_info.attachmentCount = vk_attachments.size();
+    create_info.pAttachments = vk_attachments.data();
+    create_info.subpassCount = vk_subpasses.size();
+    create_info.pSubpasses = vk_subpasses.data();
+    create_info.dependencyCount = vk_subpass_dependencies.size();
+    create_info.pDependencies = vk_subpass_dependencies.data();
+    create_info.correlatedViewMaskCount = 0;
+    create_info.pCorrelatedViewMasks = nullptr;
+
+    vkCreateRenderPass2(vk_device, &create_info, nullptr, &render_pass->vk_render_pass);
+
+    return render_pass;
+}
+
+void RenderingDeviceDriver::render_pass_free(Ref<RenderPass> p_render_pass) {
+    vkDestroyRenderPass(vk_device, p_render_pass->vk_render_pass, nullptr);
+}
+
+void RenderingDeviceDriver::command_begin_render_pass(
+    Ref<CommandBuffer> p_cmd_buffer, Ref<RenderPass> p_render_pass, Ref<Framebuffer> p_framebuffer,
+    VkCommandBufferLevel p_cmd_level, const VkRect2D &p_rect, Vector<VkClearValue> p_clear_values) {
+    VkRenderPassBeginInfo render_pass_begin = {};
+    render_pass_begin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    render_pass_begin.pNext = nullptr;
+    render_pass_begin.renderPass = p_render_pass->vk_render_pass;
+    render_pass_begin.framebuffer = p_framebuffer->vk_framebuffer;
+    render_pass_begin.renderArea = p_rect;
+    render_pass_begin.clearValueCount = p_clear_values.size();
+    render_pass_begin.pClearValues = p_clear_values.data();
+
+    VkSubpassContents vk_subpass_contents = p_cmd_level == VK_COMMAND_BUFFER_LEVEL_PRIMARY
+                                                ? VK_SUBPASS_CONTENTS_INLINE
+                                                : VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS;
+    vkCmdBeginRenderPass(p_cmd_buffer->vk_command_buffer, &render_pass_begin, vk_subpass_contents);
+}
+
+void RenderingDeviceDriver::command_end_render_pass(Ref<CommandBuffer> p_cmd_buffer) {
+    DEV_ASSERT(p_cmd_buffer->active_framebuffer != nullptr);
+
+    vkCmdEndRenderPass(p_cmd_buffer->vk_command_buffer);
+    p_cmd_buffer->active_framebuffer = nullptr;
+}
+
+void RenderingDeviceDriver::command_next_render_subpass(Ref<CommandBuffer> p_cmd_buffer,
+                                                        VkCommandBufferLevel p_cmd_level) {
+    VkSubpassContents vk_subpass_contents = p_cmd_level == VK_COMMAND_BUFFER_LEVEL_PRIMARY
+                                                ? VK_SUBPASS_CONTENTS_INLINE
+                                                : VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS;
+
+    vkCmdNextSubpass(p_cmd_buffer->vk_command_buffer, vk_subpass_contents);
+}
+
+void RenderingDeviceDriver::command_render_set_viewport(Ref<CommandBuffer> p_cmd_buffer,
+                                                        Vector<VkRect2D> p_viewports) {
+    Vector<VkViewport> vk_viewports(p_viewports.size());
+    for (uint32_t i = 0; i < p_viewports.size(); i++) {
+        vk_viewports[i] = {};
+        vk_viewports[i].x = p_viewports[i].offset.x;
+        vk_viewports[i].y = p_viewports[i].offset.y;
+        vk_viewports[i].width = p_viewports[i].extent.width;
+        vk_viewports[i].height = p_viewports[i].extent.height;
+        vk_viewports[i].minDepth = 0.f;
+        vk_viewports[i].maxDepth = 1.f;
+    }
+
+    vkCmdSetViewport(p_cmd_buffer->vk_command_buffer, 0, p_viewports.size(), vk_viewports.data());
+}
+
+void RenderingDeviceDriver::command_render_set_scissor(Ref<CommandBuffer> p_cmd_buffer,
+                                                       Vector<VkRect2D> p_scissors) {
+    vkCmdSetScissor(p_cmd_buffer->vk_command_buffer, 0, p_scissors.size(), p_scissors.data());
+}
+
+void RenderingDeviceDriver::command_render_clear_attachments(
+    Ref<CommandBuffer> p_cmd_buffer, Vector<VkClearAttachment> p_attachment_clears,
+    Vector<VkRect2D> p_rects) {
+    Vector<VkClearAttachment> vk_clear_attachments(p_attachment_clears.size());
+
+    Vector<VkClearRect> vk_rects(p_rects.size());
+    for (uint32_t i = 0; i < p_rects.size(); i++) {
+        vk_rects[i] = {};
+        vk_rects[i].rect = p_rects[i];
+        vk_rects[i].baseArrayLayer = 0;
+        vk_rects[i].layerCount = 1;
+    }
+
+    vkCmdClearAttachments(p_cmd_buffer->vk_command_buffer, p_attachment_clears.size(),
+                          p_attachment_clears.data(), vk_rects.size(), vk_rects.data());
+}
+
 Ref<Framebuffer> RenderingDeviceDriver::framebuffer_create(Ref<RenderPass> p_render_pass,
                                                            Vector<Ref<Texture>> p_attachments,
                                                            uint32_t p_width, uint32_t p_height) {
