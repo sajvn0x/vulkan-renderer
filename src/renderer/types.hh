@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "core/containers.hh"
+#include "core/math/types.hh"
 #include "core/traits.hh"
 #include "core/typedefs.hh"
 #include "vma.hh"
@@ -50,9 +51,6 @@ struct Device {
 };
 
 /* driver device */
-struct Size2i {
-    float x, y;
-};
 
 // capabilities
 struct SubgroupCapabilities {

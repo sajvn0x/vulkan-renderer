@@ -18,6 +18,7 @@ endif()
 add_subdirectory(library/volk)
 add_subdirectory(library/vma)
 add_subdirectory(library/glfw)
+add_subdirectory(library/glm)
 
 set(SOURCES
 	src/main.cc
@@ -49,4 +50,5 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 	volk
 	VulkanMemoryAllocator
 	glfw
+	glm::glm
 )
