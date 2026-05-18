@@ -16,3 +16,6 @@
 [submodule "library/glm"]
 	path = library/glm
 	url = https://github.com/g-truc/glm.git
+[submodule "library/spirv_reflect"]
+	path = library/spirv_reflect
+	url = https://github.com/KhronosGroup/SPIRV-Reflect.git

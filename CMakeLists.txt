@@ -20,6 +20,10 @@ add_subdirectory(library/vma)
 add_subdirectory(library/glfw)
 add_subdirectory(library/glm)
 
+set(SPIRV_REFLECT_STATIC_LIB ON CACHE BOOL "" FORCE)
+set(SPIRV_REFLECT_EXECUTABLE OFF CACHE BOOL "" FORCE)
+add_subdirectory(library/spirv_reflect)
+
 set(SOURCES
 	src/main.cc
 	src/engine.cc
@@ -51,4 +55,5 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 	VulkanMemoryAllocator
 	glfw
 	glm::glm
+	spirv-reflect-static
 )
