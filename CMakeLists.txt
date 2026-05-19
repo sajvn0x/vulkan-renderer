@@ -31,6 +31,7 @@ set(SOURCES
 	# core
 	src/core/error/error_list.cc
 	src/core/error/error_macros.cc
+	src/core/fs/fs.cc
 
 	# renderer
 	src/renderer/driver_context.cc
