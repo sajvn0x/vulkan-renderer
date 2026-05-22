@@ -127,6 +127,16 @@ class RenderingDeviceDriver {
                                           Vector<Ref<CommandBuffer>> p_secondary_cmd_buffers);
 
    public:
+    /* pipeline */
+    Ref<RenderPipeline> render_pipeline_create(
+        Ref<Shader> p_shader, VertexAttribute p_vertex_format,
+        VkPrimitiveTopology p_render_primitive, PipelineRasterizationState p_rasterization_state,
+        PipelineMultisampleState p_multisample_state,
+        PipelineDepthStencilState p_depth_stencil_state, PipelineColorBlendState p_blend_state,
+        Vector<int32_t> p_color_attachments, Vector<VkDynamicState> p_dynamic_state,
+        Ref<RenderPass> p_render_pass, uint32_t p_render_subpass);
+
+   public:
     RenderingDeviceDriver(RenderingDriverContext *p_context_driver);
     ~RenderingDeviceDriver();
 };

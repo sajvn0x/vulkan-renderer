@@ -943,6 +943,181 @@ void RenderingDeviceDriver::command_buffer_execute_secondary(
                          secondary_command_buffers.data());
 }
 
+Ref<RenderPipeline> RenderingDeviceDriver::render_pipeline_create(
+    Ref<Shader> p_shader, VertexAttribute p_vertex_format, VkPrimitiveTopology p_render_primitive,
+    PipelineRasterizationState p_rasterization_state, PipelineMultisampleState p_multisample_state,
+    PipelineDepthStencilState p_depth_stencil_state, PipelineColorBlendState p_blend_state,
+    Vector<int32_t> p_color_attachments, Vector<VkDynamicState> p_dynamic_state,
+    Ref<RenderPass> p_render_pass, uint32_t p_render_subpass) {
+    Ref<RenderPipeline> render_pipeline = new RenderPipeline();
+
+    // vertex input
+    Vector<VkPipelineVertexInputStateCreateInfo> vertex_input_state_create_infos;
+
+    // input assembly
+    VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info = {};
+    input_assembly_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly_create_info.topology = p_render_primitive;
+    input_assembly_create_info.primitiveRestartEnable = VK_FALSE;
+
+    // tessellation
+    VkPipelineTessellationStateCreateInfo tessellation_create_info = {};
+    tessellation_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
+    ERR_FAIL_COND_V_MSG(physical_device_properties.limits.maxTessellationPatchSize > 0 &&
+                            (p_rasterization_state.patch_control_points < 1 ||
+                             p_rasterization_state.patch_control_points >
+                                 physical_device_properties.limits.maxTessellationPatchSize),
+                        nullptr, "Invalid Vulkan tessellation");
+    tessellation_create_info.patchControlPoints = p_rasterization_state.patch_control_points;
+
+    // viewport
+    VkPipelineViewportStateCreateInfo viewport_state_create_info = {};
+    viewport_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state_create_info.viewportCount = 1;
+    viewport_state_create_info.scissorCount = 1;
+
+    // rasterization
+    VkPipelineRasterizationStateCreateInfo rasterization_state_create_info = {};
+    rasterization_state_create_info.sType =
+        VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterization_state_create_info.depthClampEnable = p_rasterization_state.enable_depth_clamp;
+    rasterization_state_create_info.rasterizerDiscardEnable =
+        p_rasterization_state.discard_primitives;
+    rasterization_state_create_info.polygonMode =
+        p_rasterization_state.wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
+    rasterization_state_create_info.cullMode = p_rasterization_state.cull_mode;
+    rasterization_state_create_info.frontFace = p_rasterization_state.front_face;
+    rasterization_state_create_info.depthBiasEnable = p_rasterization_state.depth_bias_enabled;
+    rasterization_state_create_info.depthBiasConstantFactor =
+        p_rasterization_state.depth_bias_constant_factor;
+    rasterization_state_create_info.depthBiasClamp = p_rasterization_state.depth_bias_clamp;
+    rasterization_state_create_info.depthBiasSlopeFactor =
+        p_rasterization_state.depth_bias_slope_factor;
+    rasterization_state_create_info.lineWidth = p_rasterization_state.line_width;
+
+    // multisample
+    VkPipelineMultisampleStateCreateInfo multisample_state_create_info = {};
+    multisample_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisample_state_create_info.rasterizationSamples = p_multisample_state.sample_count;
+    multisample_state_create_info.sampleShadingEnable = p_multisample_state.enable_sample_shading;
+    multisample_state_create_info.minSampleShading = p_multisample_state.min_sample_shading;
+    if (p_multisample_state.sample_mask.size()) {
+        multisample_state_create_info.pSampleMask = p_multisample_state.sample_mask.data();
+    } else {
+        multisample_state_create_info.pSampleMask = nullptr;
+    };
+
+    // depth / stencil
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_state_create_info = {};
+    depth_stencil_state_create_info.depthTestEnable = p_depth_stencil_state.enable_depth_test;
+    depth_stencil_state_create_info.depthWriteEnable = p_depth_stencil_state.enable_depth_write;
+    depth_stencil_state_create_info.depthCompareOp = p_depth_stencil_state.depth_compare_operator;
+    depth_stencil_state_create_info.depthBoundsTestEnable =
+        p_depth_stencil_state.enable_depth_range;
+    depth_stencil_state_create_info.stencilTestEnable = p_depth_stencil_state.enable_stencil;
+
+    depth_stencil_state_create_info.front.failOp = p_depth_stencil_state.front_op.fail;
+    depth_stencil_state_create_info.front.passOp = p_depth_stencil_state.front_op.pass;
+    depth_stencil_state_create_info.front.depthFailOp = p_depth_stencil_state.front_op.depth_fail;
+    depth_stencil_state_create_info.front.compareOp = p_depth_stencil_state.front_op.compare;
+    depth_stencil_state_create_info.front.compareMask = p_depth_stencil_state.front_op.compare_mask;
+    depth_stencil_state_create_info.front.writeMask = p_depth_stencil_state.front_op.write_mask;
+    depth_stencil_state_create_info.front.reference = p_depth_stencil_state.front_op.reference;
+
+    depth_stencil_state_create_info.back.failOp = p_depth_stencil_state.back_op.fail;
+    depth_stencil_state_create_info.back.passOp = p_depth_stencil_state.back_op.pass;
+    depth_stencil_state_create_info.back.depthFailOp = p_depth_stencil_state.back_op.depth_fail;
+    depth_stencil_state_create_info.back.compareOp = p_depth_stencil_state.back_op.compare;
+    depth_stencil_state_create_info.back.compareMask = p_depth_stencil_state.back_op.compare_mask;
+    depth_stencil_state_create_info.back.writeMask = p_depth_stencil_state.back_op.write_mask;
+    depth_stencil_state_create_info.back.reference = p_depth_stencil_state.back_op.reference;
+
+    depth_stencil_state_create_info.minDepthBounds = p_depth_stencil_state.depth_range_min;
+    depth_stencil_state_create_info.maxDepthBounds = p_depth_stencil_state.depth_range_max;
+
+    // blend state
+    VkPipelineColorBlendStateCreateInfo color_blend_state_create_info = {};
+    color_blend_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    color_blend_state_create_info.logicOpEnable = p_blend_state.enable_logic_op;
+    color_blend_state_create_info.logicOp = p_blend_state.logic_op;
+
+    Vector<VkPipelineColorBlendAttachmentState> vk_attachment_states(p_color_attachments.size());
+    for (uint32_t i = 0; i < p_color_attachments.size(); i++) {
+        vk_attachment_states[i] = {};
+        if (p_color_attachments[i] == VK_ATTACHMENT_UNUSED) {
+            vk_attachment_states[i].blendEnable = p_blend_state.attachments[i].enable_blend;
+
+            vk_attachment_states[i].srcColorBlendFactor =
+                p_blend_state.attachments[i].src_color_blend_factor;
+            vk_attachment_states[i].dstColorBlendFactor =
+                p_blend_state.attachments[i].dst_color_blend_factor;
+            vk_attachment_states[i].colorBlendOp = p_blend_state.attachments[i].color_blend_op;
+
+            vk_attachment_states[i].srcAlphaBlendFactor =
+                p_blend_state.attachments[i].src_alpha_blend_factor;
+            vk_attachment_states[i].dstAlphaBlendFactor =
+                p_blend_state.attachments[i].dst_alpha_blend_factor;
+            vk_attachment_states[i].alphaBlendOp = p_blend_state.attachments[i].alpha_blend_op;
+
+            if (p_blend_state.attachments[i].write_r) {
+                vk_attachment_states[i].colorWriteMask |= VK_COLOR_COMPONENT_R_BIT;
+            }
+            if (p_blend_state.attachments[i].write_g) {
+                vk_attachment_states[i].colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
+            }
+            if (p_blend_state.attachments[i].write_b) {
+                vk_attachment_states[i].colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+            }
+            if (p_blend_state.attachments[i].write_a) {
+                vk_attachment_states[i].colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
+            }
+        }
+    }
+
+    color_blend_state_create_info.attachmentCount = p_color_attachments.size();
+    color_blend_state_create_info.pAttachments = vk_attachment_states.data();
+
+    color_blend_state_create_info.blendConstants[0] = p_blend_state.blend_constant.r;
+    color_blend_state_create_info.blendConstants[1] = p_blend_state.blend_constant.g;
+    color_blend_state_create_info.blendConstants[2] = p_blend_state.blend_constant.b;
+    color_blend_state_create_info.blendConstants[3] = p_blend_state.blend_constant.a;
+
+    // dynamic state
+    VkPipelineDynamicStateCreateInfo dynamic_state_create_info = {};
+    dynamic_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state_create_info.dynamicStateCount = p_dynamic_state.size();
+    dynamic_state_create_info.pDynamicStates = p_dynamic_state.data();
+
+    VkGraphicsPipelineCreateInfo pipeline_create_info = {};
+    pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipeline_create_info.stageCount = p_shader->vk_stages_create_info.size();
+    ERR_FAIL_COND_V_MSG(pipeline_create_info.stageCount == 0, nullptr,
+                        "Can't create Vulkan pipeline without shader module");
+
+    Vector<VkPipelineShaderStageCreateInfo> vk_pipeline_stages(
+        p_shader->vk_stages_create_info.size());
+
+    pipeline_create_info.pStages = vk_pipeline_stages.data();
+    pipeline_create_info.pVertexInputState = vertex_input_state_create_infos.data();
+    pipeline_create_info.pInputAssemblyState = &input_assembly_create_info;
+    pipeline_create_info.pTessellationState = &tessellation_create_info;
+    pipeline_create_info.pViewportState = &viewport_state_create_info;
+    pipeline_create_info.pRasterizationState = &rasterization_state_create_info;
+    pipeline_create_info.pMultisampleState = &multisample_state_create_info;
+    pipeline_create_info.pDepthStencilState = &depth_stencil_state_create_info;
+    pipeline_create_info.pColorBlendState = &color_blend_state_create_info;
+    pipeline_create_info.pDynamicState = &dynamic_state_create_info;
+    pipeline_create_info.layout = p_shader->vk_pipeline_layout;
+    pipeline_create_info.renderPass = p_render_pass->vk_render_pass;
+    pipeline_create_info.subpass = p_render_subpass;
+
+    VkResult err = vkCreateGraphicsPipelines(vk_device, nullptr, 1, &pipeline_create_info, nullptr,
+                                             &render_pipeline->vk_pipeline);
+    ERR_FAIL_COND_V_MSG(err, nullptr, "Couldn't create Vulkan graphics pipelines");
+
+    return render_pipeline;
+}
+
 RenderingDeviceDriver::RenderingDeviceDriver(RenderingDriverContext *p_context_driver)
     : context_driver(p_context_driver) {}
 

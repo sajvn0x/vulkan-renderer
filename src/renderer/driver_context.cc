@@ -24,6 +24,19 @@ Error RenderingDriverContext::initialize() {
     err = _initialize_devices();
     ERR_FAIL_COND_V(err != OK, err);
 
+    VkPhysicalDeviceVulkan12Properties physical_device_props_12 = {};
+    physical_device_props_12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES;
+
+    VkPhysicalDeviceSubgroupSizeControlProperties subgroup_props = {};
+    subgroup_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES;
+    subgroup_props.pNext = &physical_device_props_12;
+
+    VkPhysicalDeviceProperties2 physical_device_props = {};
+    physical_device_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    physical_device_props.pNext = &subgroup_props;
+
+    vkGetPhysicalDeviceProperties2(physical_devices[0], &physical_device_props);
+
     return err;
 }
 
@@ -112,6 +125,9 @@ Error RenderingDriverContext::_initialize_instance() {
 
     Vector<const char*> enabled_layer_names;
     enabled_layer_names.push_back("VK_LAYER_KHRONOS_validation");
+    // enabled_layer_names.push_back("VK_LAYER_KHRONOS_profiles");
+    // enabled_layer_names.push_back("VK_LAYER_LUNARG_api_dump");
+    // enabled_layer_names.push_back("VK_LAYER_LUNARG_crash_diagnostic");
 
     VkInstanceCreateInfo instance_info = {};
     instance_info.pApplicationInfo = &app_info;

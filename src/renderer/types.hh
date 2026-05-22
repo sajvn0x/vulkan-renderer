@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "core/containers.hh"
+#include "core/math/color.hh"
 #include "core/math/types.hh"
 #include "core/traits.hh"
 #include "core/typedefs.hh"
@@ -274,4 +275,129 @@ struct Framebuffer : RefTarget<Framebuffer> {
     VkImage swap_chain_image = VK_NULL_HANDLE;
     VkImageSubresourceRange swap_chain_image_subresource_range = {};
     bool swap_chain_acquired = false;
+};
+
+/* shader */
+struct Shader : RefTarget<Shader> {
+    String name;
+    VkShaderStageFlags vk_push_constant_stages = 0;
+    Vector<VkPipelineShaderStageCreateInfo> vk_stages_create_info;
+    Vector<VkDescriptorSetLayout> vk_descriptor_set_layouts;
+    Vector<Vector<uint8_t>> spirv_stage_bytes;
+    Vector<uint64_t> original_stage_size;
+    VkPipelineLayout vk_pipeline_layout = VK_NULL_HANDLE;
+};
+
+/* pipeline */
+struct RenderPipeline : RefTarget<RenderPipeline> {
+    VkPipeline vk_pipeline = VK_NULL_HANDLE;
+};
+
+struct VertexAttribute {
+    uint32_t bindig = UINT32_MAX;
+    uint32_t location = 0;
+    uint32_t offset = 0;
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    uint32_t stride = 0;
+    VkVertexInputRate frequency = VK_VERTEX_INPUT_RATE_VERTEX;
+};
+
+struct VertexAttributeBinding {
+    uint32_t stride = 0;
+    VkVertexInputRate frequency = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    VertexAttributeBinding() = default;
+    VertexAttributeBinding(uint32_t p_stride, VkVertexInputRate p_frequency)
+        : stride(p_stride), frequency(p_frequency) {}
+};
+
+struct PipelineRasterizationState {
+    bool enable_depth_clamp = false;
+    bool discard_primitives = false;
+    bool wireframe = false;
+    VkCullModeFlags cull_mode = VK_CULL_MODE_NONE;
+    VkFrontFace front_face = VK_FRONT_FACE_CLOCKWISE;
+    bool depth_bias_enabled = false;
+    float depth_bias_constant_factor = 0.0f;
+    float depth_bias_clamp = 0.0f;
+    float depth_bias_slope_factor = 0.0f;
+    float line_width = 1.0f;
+    uint32_t patch_control_points = 1;
+};
+
+struct PipelineMultisampleState {
+    VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT;
+    bool enable_sample_shading = false;
+    float min_sample_shading = 0.0f;
+    Vector<uint32_t> sample_mask;
+    bool enable_alpha_to_coverage = false;
+    bool enable_alpha_to_one = false;
+};
+
+struct PipelineDepthStencilState {
+    bool enable_depth_test = false;
+    bool enable_depth_write = false;
+    VkCompareOp depth_compare_operator = VK_COMPARE_OP_ALWAYS;
+    bool enable_depth_range = false;
+    float depth_range_min = 0;
+    float depth_range_max = 0;
+    bool enable_stencil = false;
+
+    struct StencilOperationState {
+        VkStencilOp fail = VK_STENCIL_OP_ZERO;
+        VkStencilOp pass = VK_STENCIL_OP_ZERO;
+        VkStencilOp depth_fail = VK_STENCIL_OP_ZERO;
+        VkCompareOp compare = VK_COMPARE_OP_ALWAYS;
+        uint32_t compare_mask = 0;
+        uint32_t write_mask = 0;
+        uint32_t reference = 0;
+    };
+
+    StencilOperationState front_op;
+    StencilOperationState back_op;
+};
+
+struct PipelineColorBlendState {
+    bool enable_logic_op = false;
+    VkLogicOp logic_op = VK_LOGIC_OP_CLEAR;
+
+    struct Attachment {
+        bool enable_blend = false;
+        VkBlendFactor src_color_blend_factor = VK_BLEND_FACTOR_ZERO;
+        VkBlendFactor dst_color_blend_factor = VK_BLEND_FACTOR_ZERO;
+        VkBlendOp color_blend_op = VK_BLEND_OP_ADD;
+        VkBlendFactor src_alpha_blend_factor = VK_BLEND_FACTOR_ZERO;
+        VkBlendFactor dst_alpha_blend_factor = VK_BLEND_FACTOR_ZERO;
+        VkBlendOp alpha_blend_op = VK_BLEND_OP_ADD;
+        bool write_r = true;
+        bool write_g = true;
+        bool write_b = true;
+        bool write_a = true;
+    };
+
+    static PipelineColorBlendState create_disabled(int p_attachments = 1) {
+        PipelineColorBlendState bs;
+        for (int i = 0; i < p_attachments; i++) {
+            bs.attachments.push_back(Attachment());
+        }
+        return bs;
+    }
+
+    static PipelineColorBlendState create_blend(int p_attachments = 1) {
+        PipelineColorBlendState bs;
+        for (int i = 0; i < p_attachments; i++) {
+            Attachment ba;
+            ba.enable_blend = true;
+            ba.src_color_blend_factor = VK_BLEND_FACTOR_SRC_ALPHA;
+            ba.dst_color_blend_factor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+            ba.src_alpha_blend_factor = VK_BLEND_FACTOR_SRC_ALPHA;
+            ba.dst_alpha_blend_factor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+
+            bs.attachments.push_back(ba);
+        }
+        return bs;
+    }
+
+    Vector<Attachment> attachments;
+    Color blend_constant;
 };
