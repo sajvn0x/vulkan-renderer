@@ -1,10 +1,11 @@
 #pragma once
 
+#include <spirv_reflect.h>
 #include <vulkan/vulkan.h>
 
 #include "core/containers.hh"
 #include "core/error/error_list.hh"
-#include "types.hh"
+#include "core/traits.hh"
 
 enum PipelineType {
     PIPELINE_TYPE_GRAPHICS,
@@ -12,10 +13,9 @@ enum PipelineType {
 };
 
 struct DescriptorBinding {
-	VkDescriptorSetLayoutBinding layout;
+    VkDescriptorSetLayoutBinding layout;
     String name;
     uint32_t size = 0;
-    bool is_array = false;
 };
 
 struct DescriptorSet {
@@ -24,52 +24,35 @@ struct DescriptorSet {
 };
 
 struct PushConstantRange {
-    uint32_t offset = 0;
-    uint32_t size = 0;
+    VkPushConstantRange vk_range = {};
     String name;
 };
 
 struct VertexInputLayout {
-    uint32_t stride = 0;
-    Vector<VertexAttribute> attributes;
+    Vector<VkVertexInputBindingDescription> bindings;
+    Vector<VkVertexInputAttributeDescription> attributes;
+    VkPipelineVertexInputStateCreateInfo vk_state = {};
 };
 
-enum class SpecConstantType { Int, Float, Bool };
-
 struct SpecializationConstant {
-    uint32_t id = 0;
+    VkSpecializationMapEntry vk_entry = {};
     String name;
-    SpecConstantType type;
-    union {
-        int i;
-        float f;
-        bool b;
-    } default_value;
+};
+
+struct SpecializationInfo {
+    Vector<SpecializationConstant> constants;
+    VkSpecializationInfo vk_info = {};
 };
 
 struct ShaderReflection {
     VkShaderStageFlags stage;
-
-    String entry_point = "main";
+    uint32_t* source;
+    uint32_t source_size = 0;
     String source_path;
-
-    // descriptor sets
+    String entry_point = "main";
     Vector<DescriptorSet> descriptor_sets;
-
-    // push constants
     Vector<PushConstantRange> push_constants;
-
-    // vertex input
-    VertexInputLayout vertex_input;
-
-    // specialization constants
     Vector<SpecializationConstant> specialization_constants;
-};
-
-struct VertexFormatInfo {
-    Vector<VkVertexInputBindingDescription> vk_bindings;
-    Vector<VkVertexInputAttributeDescription> vk_attributes;
-    VkPipelineVertexInputStateCreateInfo vk_create_info = {};
 };
 
 struct ShaderModuleAsset : RefTarget<ShaderModuleAsset> {
@@ -84,19 +67,32 @@ struct ShaderModuleAsset : RefTarget<ShaderModuleAsset> {
     bool reload();
 };
 
-struct ShaderProgram {
+struct ShaderProgram : RefTarget<ShaderProgram> {
     PipelineType pipeline_type = PIPELINE_TYPE_GRAPHICS;
     Vector<Ref<ShaderModuleAsset>> shaders;
 
-    VkVertexInputAttributeDescription vk_vertex_info = {};
+    bool has_vertex_shader = false;
+    bool has_fragment_shader = false;
+    bool has_geometry_shader = false;
+    bool has_tese_shader = false;
+    bool has_tesc_shader = false;
+    bool has_compute_shader = false;
+
+    VertexInputLayout vk_vertex_info = {};
+    VkPipelineLayout vk_pipeline_layout = VK_NULL_HANDLE;
+    Vector<VkDescriptorSetLayout> descriptor_set_layouts;
+    Vector<VkShaderModule> vk_shader_modules;
+    Vector<VkPipelineShaderStageCreateInfo> vk_pipeline_stages;
 
     /*
         Capable of finding the related shaders with shaders have the same name
     */
-    Error load_shader_program(const String& shader_name);
+    Error load_shader_program(const String& shader_name, VkDevice vk_device);
 
    private:
     Error _build_shader_module_asset(const String& name);
-    ShaderReflection* _shader_reflection(const String& name);
-    Error _build_vertex_info();
+    ShaderReflection _shader_reflection(const String& name);
+    void _build_vertex_info(Vector<SpvReflectInterfaceVariable*>& variables);
+    void _build_pipeline_layout(VkDevice vk_device);
+    void _build_shader_module(VkDevice vk_device);
 };

@@ -944,12 +944,18 @@ void RenderingDeviceDriver::command_buffer_execute_secondary(
 }
 
 Ref<RenderPipeline> RenderingDeviceDriver::render_pipeline_create(
-    Ref<Shader> p_shader, VertexAttribute p_vertex_format, VkPrimitiveTopology p_render_primitive,
+    String program_name, VkPrimitiveTopology p_render_primitive,
     PipelineRasterizationState p_rasterization_state, PipelineMultisampleState p_multisample_state,
     PipelineDepthStencilState p_depth_stencil_state, PipelineColorBlendState p_blend_state,
     Vector<int32_t> p_color_attachments, Vector<VkDynamicState> p_dynamic_state,
     Ref<RenderPass> p_render_pass, uint32_t p_render_subpass) {
     Ref<RenderPipeline> render_pipeline = new RenderPipeline();
+
+    // load the shader program
+    Ref<ShaderProgram> shader_program = new ShaderProgram();
+    Error err = shader_program->load_shader_program(program_name, vk_device);
+    ERR_FAIL_COND_V(err != OK, nullptr);
+    ERR_FAIL_COND_V(shader_program->pipeline_type == PIPELINE_TYPE_GRAPHICS, nullptr);
 
     // vertex input
     Vector<VkPipelineVertexInputStateCreateInfo> vertex_input_state_create_infos;
@@ -1090,15 +1096,13 @@ Ref<RenderPipeline> RenderingDeviceDriver::render_pipeline_create(
 
     VkGraphicsPipelineCreateInfo pipeline_create_info = {};
     pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipeline_create_info.stageCount = p_shader->vk_stages_create_info.size();
+    pipeline_create_info.stageCount = 0;  // p_shader->vk_stages_create_info.size();
     ERR_FAIL_COND_V_MSG(pipeline_create_info.stageCount == 0, nullptr,
                         "Can't create Vulkan pipeline without shader module");
 
-    Vector<VkPipelineShaderStageCreateInfo> vk_pipeline_stages(
-        p_shader->vk_stages_create_info.size());
-
-    pipeline_create_info.pStages = vk_pipeline_stages.data();
-    pipeline_create_info.pVertexInputState = vertex_input_state_create_infos.data();
+    pipeline_create_info.stageCount = shader_program->vk_pipeline_stages.size();
+    pipeline_create_info.pStages = shader_program->vk_pipeline_stages.data();
+    pipeline_create_info.pVertexInputState = &shader_program->vk_vertex_info.vk_state;
     pipeline_create_info.pInputAssemblyState = &input_assembly_create_info;
     pipeline_create_info.pTessellationState = &tessellation_create_info;
     pipeline_create_info.pViewportState = &viewport_state_create_info;
@@ -1107,13 +1111,13 @@ Ref<RenderPipeline> RenderingDeviceDriver::render_pipeline_create(
     pipeline_create_info.pDepthStencilState = &depth_stencil_state_create_info;
     pipeline_create_info.pColorBlendState = &color_blend_state_create_info;
     pipeline_create_info.pDynamicState = &dynamic_state_create_info;
-    pipeline_create_info.layout = p_shader->vk_pipeline_layout;
+    pipeline_create_info.layout = shader_program->vk_pipeline_layout;
     pipeline_create_info.renderPass = p_render_pass->vk_render_pass;
     pipeline_create_info.subpass = p_render_subpass;
 
-    VkResult err = vkCreateGraphicsPipelines(vk_device, nullptr, 1, &pipeline_create_info, nullptr,
-                                             &render_pipeline->vk_pipeline);
-    ERR_FAIL_COND_V_MSG(err, nullptr, "Couldn't create Vulkan graphics pipelines");
+    VkResult result = vkCreateGraphicsPipelines(vk_device, nullptr, 1, &pipeline_create_info,
+                                                nullptr, &render_pipeline->vk_pipeline);
+    ERR_FAIL_COND_V_MSG(result, nullptr, "Couldn't create Vulkan graphics pipelines");
 
     return render_pipeline;
 }

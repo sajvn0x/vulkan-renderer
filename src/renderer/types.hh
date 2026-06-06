@@ -293,24 +293,6 @@ struct RenderPipeline : RefTarget<RenderPipeline> {
     VkPipeline vk_pipeline = VK_NULL_HANDLE;
 };
 
-struct VertexAttribute {
-    uint32_t bindig = UINT32_MAX;
-    uint32_t location = 0;
-    uint32_t offset = 0;
-    VkFormat format = VK_FORMAT_UNDEFINED;
-    uint32_t stride = 0;
-    VkVertexInputRate frequency = VK_VERTEX_INPUT_RATE_VERTEX;
-};
-
-struct VertexAttributeBinding {
-    uint32_t stride = 0;
-    VkVertexInputRate frequency = VK_VERTEX_INPUT_RATE_VERTEX;
-
-    VertexAttributeBinding() = default;
-    VertexAttributeBinding(uint32_t p_stride, VkVertexInputRate p_frequency)
-        : stride(p_stride), frequency(p_frequency) {}
-};
-
 struct PipelineRasterizationState {
     bool enable_depth_clamp = false;
     bool discard_primitives = false;

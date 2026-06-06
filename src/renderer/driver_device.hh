@@ -3,6 +3,7 @@
 #include "core/containers.hh"
 #include "core/error/error_list.hh"
 #include "driver_context.hh"
+#include "shader_container.hh"
 #include "types.hh"
 
 class RenderingDeviceDriver {
@@ -129,8 +130,8 @@ class RenderingDeviceDriver {
    public:
     /* pipeline */
     Ref<RenderPipeline> render_pipeline_create(
-        Ref<Shader> p_shader, VertexAttribute p_vertex_format,
-        VkPrimitiveTopology p_render_primitive, PipelineRasterizationState p_rasterization_state,
+        String program_name, VkPrimitiveTopology p_render_primitive,
+        PipelineRasterizationState p_rasterization_state,
         PipelineMultisampleState p_multisample_state,
         PipelineDepthStencilState p_depth_stencil_state, PipelineColorBlendState p_blend_state,
         Vector<int32_t> p_color_attachments, Vector<VkDynamicState> p_dynamic_state,
