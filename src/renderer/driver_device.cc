@@ -1,8 +1,13 @@
 #include "driver_device.hh"
 
+#include <algorithm>
+
 #include "core/error/error_macros.hh"
 #include "renderer/types.hh"
+#include "shader_container.hh"
 #include "vulkan/vulkan_core.h"
+
+static const uint32_t MAX_DYNAMIC_BUFFERS = 8u;
 
 Error RenderingDeviceDriver::initialize(uint32_t p_device_index, uint32_t p_frame_count) {
     context_device = context_driver->device_get(p_device_index);
@@ -1120,6 +1125,422 @@ Ref<RenderPipeline> RenderingDeviceDriver::render_pipeline_create(
     ERR_FAIL_COND_V_MSG(result, nullptr, "Couldn't create Vulkan graphics pipelines");
 
     return render_pipeline;
+}
+
+/* swapchain */
+Ref<Swapchain> RDD::swapchain_create(Surface &p_surface) {
+    Ref<Swapchain> swapchain = new Swapchain();
+
+    VkSurfaceCapabilitiesKHR surface_capabilities = {};
+    VkResult err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, p_surface.vk_surface,
+                                                             &surface_capabilities);
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr, "Couldn't get Vulkan surface capabilities");
+
+    if (surface_capabilities.currentExtent.width != 0xFFFFFFFF) {
+        surface_capabilities.currentExtent.width =
+            std::clamp(p_surface.width, surface_capabilities.minImageExtent.width,
+                       surface_capabilities.maxImageExtent.width);
+        surface_capabilities.currentExtent.height =
+            std::clamp(p_surface.height, surface_capabilities.minImageExtent.height,
+                       surface_capabilities.maxImageExtent.height);
+    }
+
+    VkExtent2D extent;
+    if (surface_capabilities.currentExtent.width == 0xFFFFFFFF) {
+        extent.width = std::clamp(p_surface.width, surface_capabilities.minImageExtent.width,
+                                  surface_capabilities.maxImageExtent.width);
+        extent.height = std::clamp(p_surface.height, surface_capabilities.minImageExtent.height,
+                                   surface_capabilities.maxImageExtent.height);
+    } else {
+        extent = surface_capabilities.currentExtent;
+        p_surface.width = extent.width;
+        p_surface.height = extent.height;
+    }
+
+    if (p_surface.width == 0 || p_surface.height == 0) {
+        return nullptr;
+    }
+
+    Vector<VkPresentModeKHR> present_modes;
+    uint32_t present_modes_count = 0;
+
+    err = vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, p_surface.vk_surface,
+                                                    &present_modes_count, nullptr);
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr, "Couldn't get Vulkan surface present modes");
+
+    present_modes.resize(present_modes_count);
+    err = vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, p_surface.vk_surface,
+                                                    &present_modes_count, present_modes.data());
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr, "Couldn't get Vulkan surface present modes");
+
+    VkPresentModeKHR present_mode = VkPresentModeKHR::VK_PRESENT_MODE_FIFO_KHR;
+    String present_mode_name = "Enabled";
+    switch (p_surface.vsync_mode) {
+        case VSYNC_MAILBOX:
+            present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+            present_mode_name = "Mailbox";
+            break;
+        case VSYNC_ADAPTIVE:
+            present_mode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+            present_mode_name = "Adaptive";
+            break;
+        case VSYNC_ENABLED:
+            present_mode = VK_PRESENT_MODE_FIFO_KHR;
+            present_mode_name = "Enabled";
+            break;
+        case VSYNC_DISABLED:
+            present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+            present_mode_name = "Disabled";
+            break;
+    }
+
+    if (std::find(present_modes.begin(), present_modes.end(), present_mode) ==
+        present_modes.end()) {
+        p_surface.vsync_mode = VSYNC_ENABLED;
+        present_mode = VkPresentModeKHR::VK_PRESENT_MODE_FIFO_KHR;
+    }
+
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    VkColorSpaceKHR color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+
+    if (!_determine_swap_chain_format(p_surface, format, color_space)) {
+        ERR_FAIL_V_MSG(nullptr, "Vulkan surface did not return any valid formats");
+    } else {
+        swapchain->format = format;
+        swapchain->color_space = color_space;
+    };
+
+    uint32_t desired_swapchain_images = surface_capabilities.minImageCount;
+    VkSurfaceTransformFlagBitsKHR surface_transform_bits = surface_capabilities.currentTransform;
+    VkCompositeAlphaFlagBitsKHR composite_alpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+
+    VkSwapchainCreateInfoKHR swapchain_create_info = {};
+    swapchain_create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchain_create_info.pNext = nullptr;
+    swapchain_create_info.flags = 0;
+    swapchain_create_info.surface = p_surface.vk_surface;
+    swapchain_create_info.minImageCount = desired_swapchain_images;
+    swapchain_create_info.imageFormat = swapchain->format;
+    swapchain_create_info.imageColorSpace = swapchain->color_space;
+    swapchain_create_info.imageExtent = extent;
+    swapchain_create_info.imageArrayLayers = 1;
+    swapchain_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    swapchain_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    swapchain_create_info.queueFamilyIndexCount = surface_transform_bits;
+    swapchain_create_info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+    swapchain_create_info.compositeAlpha = composite_alpha;
+    swapchain_create_info.presentMode = present_mode;
+    swapchain_create_info.clipped = VK_TRUE;
+    swapchain_create_info.oldSwapchain = VK_NULL_HANDLE;
+
+    VkResult result =
+        vkCreateSwapchainKHR(vk_device, &swapchain_create_info, nullptr, &swapchain->vk_swapchain);
+    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, nullptr, "Couldn't able to create swapchain");
+
+    uint32_t image_count = 0;
+    result = vkGetSwapchainImagesKHR(vk_device, swapchain->vk_swapchain, &image_count, nullptr);
+    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, nullptr, "Couldn't get Vulkan swapchain images");
+
+    swapchain->images.resize(image_count);
+    result = vkGetSwapchainImagesKHR(vk_device, swapchain->vk_swapchain, &image_count,
+                                     swapchain->images.data());
+    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, nullptr, "Couldn't get Vulkan swapchain images");
+
+    VkImageViewCreateInfo view_create_info = {};
+    view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_create_info.format = swapchain->format;
+    view_create_info.components.r = VK_COMPONENT_SWIZZLE_R;
+    view_create_info.components.g = VK_COMPONENT_SWIZZLE_G;
+    view_create_info.components.b = VK_COMPONENT_SWIZZLE_B;
+    view_create_info.components.a = VK_COMPONENT_SWIZZLE_A;
+    view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_create_info.subresourceRange.levelCount = 1;
+    view_create_info.subresourceRange.layerCount = 1;
+
+    swapchain->image_views.reserve(image_count);
+
+    VkImageView image_view;
+    for (uint32_t i = 0; i < image_count; i++) {
+        view_create_info.image = swapchain->images[i];
+        result = vkCreateImageView(vk_device, &view_create_info, nullptr, &image_view);
+        ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, nullptr,
+                            "Couldn't create Vulkan image view for swapchain image");
+
+        swapchain->image_views.push_back(image_view);
+    }
+
+    swapchain->framebuffers.reserve(image_count);
+
+    VkAttachmentDescription2KHR attachment = {};
+    attachment.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2_KHR;
+    attachment.format = format;
+    attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference2KHR color_reference = {};
+    color_reference.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2_KHR;
+    color_reference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription2KHR subpass = {};
+    subpass.sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2_KHR;
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &color_reference;
+
+    VkRenderPassCreateInfo2KHR pass_info = {};
+    pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2_KHR;
+    pass_info.attachmentCount = 1;
+    pass_info.pAttachments = &attachment;
+    pass_info.subpassCount = 1;
+    pass_info.pSubpasses = &subpass;
+
+    VkRenderPass vk_render_pass = VK_NULL_HANDLE;
+    _create_render_pass(vk_device, &pass_info, nullptr, &vk_render_pass);
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr,
+                        "Couldn't create Vulkan render pass for swapchain");
+
+    swapchain->vk_render_pass = vk_render_pass;
+
+    VkFramebufferCreateInfo fb_create_info = {};
+    fb_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    fb_create_info.renderPass = vk_render_pass;
+    fb_create_info.attachmentCount = 1;
+    fb_create_info.width = p_surface.width;
+    fb_create_info.height = p_surface.height;
+    fb_create_info.layers = 1;
+
+    VkFramebuffer vk_framebuffer;
+    for (uint32_t i = 0; i < image_count; i++) {
+        fb_create_info.pAttachments = &swapchain->image_views[i];
+        err = vkCreateFramebuffer(vk_device, &fb_create_info, nullptr, &vk_framebuffer);
+        ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr,
+                            "Couldn't create Vulkan framebuffer for swapchain image");
+
+        Ref<Framebuffer> framebuffer = new Framebuffer();
+        framebuffer->vk_framebuffer = vk_framebuffer;
+        framebuffer->swap_chain_image = swapchain->images[i];
+        ;
+        framebuffer->swap_chain_image_subresource_range = view_create_info.subresourceRange;
+        swapchain->framebuffers.push_back(framebuffer);
+    }
+
+    VkSemaphore vk_semaphore = VK_NULL_HANDLE;
+    for (uint32_t i = 0; i < image_count; i++) {
+        VkSemaphoreCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        err = vkCreateSemaphore(vk_device, &create_info, nullptr, &vk_semaphore);
+        ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr,
+                            "Couldn't create Vulkan semaphore for swapchain image");
+
+        swapchain->present_semaphores.push_back(vk_semaphore);
+    }
+
+    return swapchain;
+}
+
+bool RDD::_determine_swap_chain_format(Surface &p_surface, VkFormat &p_format,
+                                       VkColorSpaceKHR &p_color_space) {
+    uint32_t format_count = 0;
+    Vector<VkSurfaceFormatKHR> formats;
+
+    while (true) {
+        VkResult err = vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, p_surface.vk_surface,
+                                                            &format_count, nullptr);
+        ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, false, "Couldn't retrieve Vulkan surface formats");
+
+        formats.resize(format_count);
+        err = vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, p_surface.vk_surface,
+                                                   &format_count, formats.data());
+        ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, false, "Couldn't retrieve Vulkan surface formats");
+        if (err == VK_SUCCESS) {
+            break;
+        }
+
+        ERR_FAIL_COND_V_MSG(err != VK_INCOMPLETE, false,
+                            "Couldn't retrieve Vulkan surface formats");
+    }
+    formats.resize(format_count);
+
+    if (format_count == 1 && formats[0].format == VK_FORMAT_UNDEFINED) {
+        p_format = VK_FORMAT_B8G8R8A8_UNORM;
+        p_color_space = formats[0].colorSpace;
+        return true;
+    }
+
+    struct FormatCandidate {
+        VkFormat format;
+        VkColorSpaceKHR colorspace;
+    };
+
+    Vector<FormatCandidate> preferred_formats;
+    preferred_formats.push_back({VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR});
+    preferred_formats.push_back({VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR});
+
+    bool found = false;
+
+    for (const FormatCandidate &candidate : preferred_formats) {
+        for (uint32_t i = 0; i < format_count; i++) {
+            if (formats[i].format == candidate.format &&
+                formats[i].colorSpace == candidate.colorspace) {
+                p_format = formats[i].format;
+                p_color_space = formats[i].colorSpace;
+                found = true;
+                break;
+            }
+
+            if (found) {
+                break;
+            }
+        }
+    }
+
+    return found;
+}
+
+Error RDD::swapchain_resize(Ref<Swapchain> p_old_swapchain) {
+    if (enabled_device_extension_names.find(VK_KHR_SHARED_PRESENTABLE_IMAGE_EXTENSION_NAME) !=
+            enabled_device_extension_names.end() &&
+        p_old_swapchain) {
+        // check the swapchain status
+        // VkResult result = vkGetSwapchainStatusKHR(vk_device, p_old_swapchain->vk_swapchain);
+    }
+
+    return OK;
+}
+
+Ref<Framebuffer> RDD::swapchain_acquire_framebuffer() { return nullptr; }
+
+void RDD::swapchain_free(Ref<Swapchain> swapchain) {
+    vkDestroySwapchainKHR(vk_device, swapchain->vk_swapchain, nullptr);
+}
+
+static void _convert_subpass_attachments(const VkAttachmentReference2 *p_attachment_references_2,
+                                         uint32_t p_attachment_references_count,
+                                         Vector<VkAttachmentReference> &r_attachment_references) {
+    r_attachment_references.resize(p_attachment_references_count);
+    for (uint32_t i = 0; i < p_attachment_references_count; i++) {
+        // Ignore sType, pNext and aspectMask (which is currently unused).
+        r_attachment_references[i].attachment = p_attachment_references_2[i].attachment;
+        r_attachment_references[i].layout = p_attachment_references_2[i].layout;
+    }
+}
+
+VkResult RDD::_create_render_pass(VkDevice p_device, const VkRenderPassCreateInfo2 *p_create_info,
+                                  const VkAllocationCallbacks *p_allocator,
+                                  VkRenderPass *p_render_pass) {
+    if (vkCreateRenderPass2KHR) {
+        return vkCreateRenderPass2KHR(p_device, p_create_info, p_allocator, p_render_pass);
+    } else {
+        Vector<VkAttachmentDescription> attachments;
+        attachments.resize(p_create_info->attachmentCount);
+        for (uint32_t i = 0; i < p_create_info->attachmentCount; i++) {
+            const VkAttachmentDescription2 &src = p_create_info->pAttachments[i];
+            VkAttachmentDescription &dst = attachments[i];
+            dst.flags = src.flags;
+            dst.format = src.format;
+            dst.samples = src.samples;
+            dst.loadOp = src.loadOp;
+            dst.storeOp = src.storeOp;
+            dst.stencilLoadOp = src.stencilLoadOp;
+            dst.stencilStoreOp = src.stencilStoreOp;
+            dst.initialLayout = src.initialLayout;
+            dst.finalLayout = src.finalLayout;
+        }
+
+        const uint32_t attachment_vectors_per_subpass = 4;
+        Vector<Vector<VkAttachmentReference>> subpasses_attachments;
+        Vector<VkSubpassDescription> subpasses;
+        subpasses_attachments.resize(p_create_info->subpassCount * attachment_vectors_per_subpass);
+        subpasses.resize(p_create_info->subpassCount);
+        for (uint32_t i = 0; i < p_create_info->subpassCount; i++) {
+            const uint32_t vector_base_index = i * attachment_vectors_per_subpass;
+            const uint32_t input_attachments_index = vector_base_index + 0;
+            const uint32_t color_attachments_index = vector_base_index + 1;
+            const uint32_t resolve_attachments_index = vector_base_index + 2;
+            const uint32_t depth_attachment_index = vector_base_index + 3;
+            _convert_subpass_attachments(p_create_info->pSubpasses[i].pInputAttachments,
+                                         p_create_info->pSubpasses[i].inputAttachmentCount,
+                                         subpasses_attachments[input_attachments_index]);
+            _convert_subpass_attachments(p_create_info->pSubpasses[i].pColorAttachments,
+                                         p_create_info->pSubpasses[i].colorAttachmentCount,
+                                         subpasses_attachments[color_attachments_index]);
+            _convert_subpass_attachments(
+                p_create_info->pSubpasses[i].pResolveAttachments,
+                (p_create_info->pSubpasses[i].pResolveAttachments != nullptr)
+                    ? p_create_info->pSubpasses[i].colorAttachmentCount
+                    : 0,
+                subpasses_attachments[resolve_attachments_index]);
+            _convert_subpass_attachments(
+                p_create_info->pSubpasses[i].pDepthStencilAttachment,
+                (p_create_info->pSubpasses[i].pDepthStencilAttachment != nullptr) ? 1 : 0,
+                subpasses_attachments[depth_attachment_index]);
+
+            // Ignores sType and pNext from the subpass.
+            const VkSubpassDescription2 &src_subpass = p_create_info->pSubpasses[i];
+            VkSubpassDescription &dst_subpass = subpasses[i];
+            dst_subpass.flags = src_subpass.flags;
+            dst_subpass.pipelineBindPoint = src_subpass.pipelineBindPoint;
+            dst_subpass.inputAttachmentCount = src_subpass.inputAttachmentCount;
+            dst_subpass.pInputAttachments = subpasses_attachments[input_attachments_index].data();
+            dst_subpass.colorAttachmentCount = src_subpass.colorAttachmentCount;
+            dst_subpass.pColorAttachments = subpasses_attachments[color_attachments_index].data();
+            dst_subpass.pResolveAttachments =
+                subpasses_attachments[resolve_attachments_index].data();
+            dst_subpass.pDepthStencilAttachment =
+                subpasses_attachments[depth_attachment_index].data();
+            dst_subpass.preserveAttachmentCount = src_subpass.preserveAttachmentCount;
+            dst_subpass.pPreserveAttachments = src_subpass.pPreserveAttachments;
+
+            Vector<VkSubpassDependency> dependencies;
+            dependencies.resize(p_create_info->dependencyCount);
+
+            for (uint32_t i = 0; i < p_create_info->dependencyCount; i++) {
+                // Ignores sType and pNext from the dependency, and viewMask which is currently
+                // unused.
+                const VkSubpassDependency2 &src_dependency = p_create_info->pDependencies[i];
+                VkSubpassDependency &dst_dependency = dependencies[i];
+                dst_dependency.srcSubpass = src_dependency.srcSubpass;
+                dst_dependency.dstSubpass = src_dependency.dstSubpass;
+                dst_dependency.srcStageMask = src_dependency.srcStageMask;
+                dst_dependency.dstStageMask = src_dependency.dstStageMask;
+                dst_dependency.srcAccessMask = src_dependency.srcAccessMask;
+                dst_dependency.dstAccessMask = src_dependency.dstAccessMask;
+                dst_dependency.dependencyFlags = src_dependency.dependencyFlags;
+            }
+        }
+
+        Vector<VkSubpassDependency> dependencies;
+        dependencies.resize(p_create_info->dependencyCount);
+        for (uint32_t i = 0; i < p_create_info->dependencyCount; i++) {
+            const VkSubpassDependency2 &src_dependency = p_create_info->pDependencies[i];
+            VkSubpassDependency &dst_dependency = dependencies[i];
+            dst_dependency.srcSubpass = src_dependency.srcSubpass;
+            dst_dependency.dstSubpass = src_dependency.dstSubpass;
+            dst_dependency.srcStageMask = src_dependency.srcStageMask;
+            dst_dependency.dstStageMask = src_dependency.dstStageMask;
+            dst_dependency.srcAccessMask = src_dependency.srcAccessMask;
+            dst_dependency.dstAccessMask = src_dependency.dstAccessMask;
+            dst_dependency.dependencyFlags = src_dependency.dependencyFlags;
+        }
+
+        VkRenderPassCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        create_info.pNext = p_create_info->pNext;
+        create_info.flags = p_create_info->flags;
+        create_info.attachmentCount = attachments.size();
+        create_info.pAttachments = attachments.data();
+        create_info.subpassCount = subpasses.size();
+        create_info.pSubpasses = subpasses.data();
+        create_info.dependencyCount = dependencies.size();
+        create_info.pDependencies = dependencies.data();
+        return vkCreateRenderPass(vk_device, &create_info, p_allocator, p_render_pass);
+    }
 }
 
 RenderingDeviceDriver::RenderingDeviceDriver(RenderingDriverContext *p_context_driver)

@@ -277,6 +277,19 @@ struct Framebuffer : RefTarget<Framebuffer> {
     bool swap_chain_acquired = false;
 };
 
+/* swapchain */
+struct Swapchain : RefTarget<Swapchain> {
+    VkSwapchainKHR vk_swapchain = VK_NULL_HANDLE;
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    VkColorSpaceKHR color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    Vector<VkImage> images;
+    Vector<VkImageView> image_views;
+    Vector<VkSemaphore> present_semaphores;
+    Vector<Ref<Framebuffer>> framebuffers;
+    VkRenderPass vk_render_pass = VK_NULL_HANDLE;
+    uint32_t image_index = 0;
+};
+
 /* shader */
 struct Shader : RefTarget<Shader> {
     String name;

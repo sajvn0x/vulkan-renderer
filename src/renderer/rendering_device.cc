@@ -2,10 +2,20 @@
 
 #include "core/error/error_macros.hh"
 
-Error RenderingDevice::initialize() {
+Error RenderingDevice::initialize(GLFWwindow* window) {
     driver_context = new RenderingDriverContext();
     Error err = driver_context->initialize();
     ERR_FAIL_COND_V(err != OK, err);
+
+    // surface
+    VkResult result = glfwCreateWindowSurface(driver_context->instance_get(), window, nullptr,
+                                              &surface.vk_surface);
+    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, ERR_CANT_CREATE, "Failed to create surface");
+
+    int width, height;
+    glfwGetWindowSize(window, &width, &height);
+    surface.width = width;
+    surface.height = height;
 
     driver_device = new RenderingDeviceDriver(driver_context);
 
@@ -14,6 +24,8 @@ Error RenderingDevice::initialize() {
 
     err = driver_device->initialize(physical_device_index, frame_count);
     ERR_FAIL_COND_V(err != OK, err);
+
+    driver_device->swapchain_create(surface);
 
     return OK;
 }
@@ -59,4 +71,7 @@ uint32_t RenderingDevice::_choose_physical_device() {
 
 RenderingDevice::RenderingDevice() {}
 
-RenderingDevice::~RenderingDevice() {}
+RenderingDevice::~RenderingDevice() {
+    // command pool
+    // driver_device->command_pool_free(vk_primary_command_pool);
+}

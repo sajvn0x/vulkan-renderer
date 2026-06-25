@@ -2,8 +2,8 @@
 
 #include "core/containers.hh"
 #include "core/error/error_list.hh"
+#include "display.hh"
 #include "driver_context.hh"
-#include "shader_container.hh"
 #include "types.hh"
 
 class RenderingDeviceDriver {
@@ -49,6 +49,9 @@ class RenderingDeviceDriver {
     Error _add_queue_create_info(Vector<VkDeviceQueueCreateInfo> &r_queue_create_info);
     Error _initialize_device(const Vector<VkDeviceQueueCreateInfo> &p_queue_create_info);
     Error _initialize_allocator();
+    VkResult _create_render_pass(VkDevice p_device, const VkRenderPassCreateInfo2 *p_create_info,
+                                 const VkAllocationCallbacks *p_allocator,
+                                 VkRenderPass *p_render_pass);
 
    public:
     Error initialize(uint32_t p_device_index, uint32_t p_frame_count);
@@ -95,6 +98,15 @@ class RenderingDeviceDriver {
     void command_render_clear_attachments(Ref<CommandBuffer> p_cmd_buffer,
                                           Vector<VkClearAttachment> p_attachment_clears,
                                           Vector<VkRect2D> p_rects);
+
+   public:
+    /* swapchain */
+    Ref<Swapchain> swapchain_create(Surface &p_surface);
+    Error swapchain_resize(Ref<Swapchain> p_old_swapchain = nullptr);
+    Ref<Framebuffer> swapchain_acquire_framebuffer();
+    bool _determine_swap_chain_format(Surface &p_surface, VkFormat &p_format,
+                                      VkColorSpaceKHR &p_color_space);
+    void swapchain_free(Ref<Swapchain> p_swapchain);
 
    public:
     /* framebuffer */
