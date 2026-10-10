@@ -34,9 +34,9 @@ set(SOURCES
 	src/core/fs/fs.cc
 
 	# renderer
+	src/renderer.cc
 	src/renderer/driver_context.cc
 	src/renderer/driver_device.cc
-	src/renderer/rendering_device.cc
 	src/renderer/shader_container.cc
 
 	src/renderer/vma.cc

@@ -8,9 +8,12 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 }
 
 void Engine::run() {
+    renderer->begin_frame();
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         glfwSetKeyCallback(window, key_callback);
+        renderer->next_frame();
     }
 }
 
@@ -24,7 +27,8 @@ Error Engine::initialize() {
     window = glfwCreateWindow(mode->width, mode->height, APP_NAME, nullptr, nullptr);
     ERR_FAIL_COND_V_MSG(window == nullptr, ERR_CANT_CREATE, "Failed to create window");
 
-    Error err = rendering_device.initialize(window);
+    renderer = new Renderer();
+    Error err = renderer->initialize(window);
     ERR_FAIL_COND_V_MSG(err != OK, ERR_CANT_CREATE, "Failed to create rendering device");
 
     return OK;

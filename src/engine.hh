@@ -3,17 +3,14 @@
 #include <GLFW/glfw3.h>
 
 #include "core/error/error_list.hh"
-#include "renderer/rendering_device.hh"
+#include "renderer.hh"
 
 class Engine {
 private:
     float delta_time;
 
-    // window
-    GLFWwindow *window;
-
-    // renderer
-    RenderingDevice rendering_device;
+    GLFWwindow* window;
+    Renderer* renderer = nullptr;
 
 public:
     Error initialize();
