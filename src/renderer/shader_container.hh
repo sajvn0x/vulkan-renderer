@@ -89,7 +89,7 @@ struct ShaderProgram : RefTarget<ShaderProgram> {
     */
     Error load_shader_program(const String& shader_name, VkDevice vk_device);
 
-   private:
+private:
     Error _build_shader_module_asset(const String& name);
     ShaderReflection _shader_reflection(const String& name);
     void _build_vertex_info(Vector<SpvReflectInterfaceVariable*>& variables);

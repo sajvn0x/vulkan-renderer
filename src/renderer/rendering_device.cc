@@ -27,6 +27,25 @@ Error RenderingDevice::initialize(GLFWwindow* window) {
 
     driver_device->swapchain_create(surface);
 
+    // create default graphics pipeline
+    // simple snippet for creating a graphics pipeline
+    // PipelineRasterizationState rasterization_state = {};
+    // PipelineMultisampleState multisample_state = {};
+    // PipelineDepthStencilState depth_stencil_state = {};
+    // PipelineColorBlendState blend_state = {};
+    // Vector<int32_t> color_attachments;
+    // Vector<VkDynamicState> dynamic_states;
+    //
+    // Vector<Attachment> attachments;
+    // Vector<Subpass> subpasses;
+    // Vector<SubpassDependency> subpass_dependencies;
+    // Ref<RenderPass> render_pass =
+    //     driver_device->render_pass_create(attachments, subpasses, subpass_dependencies);
+    //
+    // driver_device->render_pipeline_create(
+    //     "default", VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, rasterization_state, multisample_state,
+    //     depth_stencil_state, blend_state, color_attachments, dynamic_states, render_pass, 1);
+
     return OK;
 }
 

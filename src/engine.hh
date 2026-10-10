@@ -6,7 +6,7 @@
 #include "renderer/rendering_device.hh"
 
 class Engine {
-   private:
+private:
     float delta_time;
 
     // window
@@ -15,7 +15,7 @@ class Engine {
     // renderer
     RenderingDevice rendering_device;
 
-   public:
+public:
     Error initialize();
     void run();
 

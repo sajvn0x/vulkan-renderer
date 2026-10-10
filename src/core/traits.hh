@@ -5,7 +5,7 @@
 #include <cstdint>
 
 class NonCopyable {
-   public:
+public:
     NonCopyable() = default;
     ~NonCopyable() = default;
 
@@ -23,7 +23,7 @@ class RefConst;
 
 template <class T>
 class RefTarget {
-   public:
+public:
     inline RefTarget() = default;
     inline RefTarget(const RefTarget&) { /* Do not copy ref count */ }
     inline ~RefTarget() {
@@ -51,14 +51,14 @@ class RefTarget {
         assert(old_value != 0 && old_value != EMBEDDED && "Too many calls to release!");
     }
 
-   protected:
+protected:
     static constexpr uint32_t EMBEDDED = 0x0ebedded;
     mutable std::atomic<uint32_t> m_ref_count{0};
 };
 
 template <class T>
 class Ref {
-   public:
+public:
     inline Ref() : m_ptr(nullptr) {}
     inline Ref(T* ptr) : m_ptr(ptr) { add_ref(); }
     inline Ref(const Ref<T>& other) : m_ptr(other.m_ptr) { add_ref(); }
@@ -102,7 +102,7 @@ class Ref {
     inline bool operator==(const T* ptr) const { return m_ptr == ptr; }
     inline bool operator!=(const T* ptr) const { return m_ptr != ptr; }
 
-   private:
+private:
     template <class T2>
     friend class RefConst;
 
@@ -118,7 +118,7 @@ class Ref {
 
 template <class T>
 class RefConst {
-   public:
+public:
     inline RefConst() : m_ptr(nullptr) {}
     inline RefConst(const T* ptr) : m_ptr(ptr) { add_ref(); }
     inline RefConst(const RefConst<T>& other) : m_ptr(other.m_ptr) { add_ref(); }
@@ -157,7 +157,7 @@ class RefConst {
     inline explicit operator bool() const { return m_ptr != nullptr; }
     inline const T* get() const { return m_ptr; }
 
-   private:
+private:
     inline void add_ref() {
         if (m_ptr != nullptr) m_ptr->add_ref();
     }

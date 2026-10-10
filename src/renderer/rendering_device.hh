@@ -15,10 +15,10 @@ class RenderingDevice {
 
     Ref<CommandPool> vk_primary_command_pool = nullptr;
 
-   private:
+private:
     uint32_t _choose_physical_device();
 
-   public:
+public:
     Error initialize(GLFWwindow* window);
 
     RenderingDevice();

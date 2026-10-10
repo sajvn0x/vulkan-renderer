@@ -40,7 +40,7 @@ class RenderingDeviceDriver {
     bool device_fault_support = false;
     bool framebuffer_depth_resolve = false;
 
-   private:
+private:
     void _register_requested_device_extension(const String &p_extension_name, bool p_required);
     Error _initialize_device_extensions();
     Error _check_device_features();
@@ -53,14 +53,14 @@ class RenderingDeviceDriver {
                                  const VkAllocationCallbacks *p_allocator,
                                  VkRenderPass *p_render_pass);
 
-   public:
+public:
     Error initialize(uint32_t p_device_index, uint32_t p_frame_count);
 
-   private:
+private:
     /* Memory */
     VmaAllocator allocator = nullptr;
 
-   public:
+public:
     /* buffers */
     Ref<Buffer> buffer_create(uint64_t p_size, VkBufferUsageFlags p_usage,
                               VmaMemoryUsage p_vma_usage);
@@ -70,16 +70,16 @@ class RenderingDeviceDriver {
     void buffer_unmap(Ref<Buffer> p_buffer);
 
     /* texture */
-   public:
+public:
     Ref<Texture> texture_create(const TextureFormat &p_format, const TextureView &p_view);
     void texture_free(Ref<Texture> p_texture);
 
     /* sampler */
-   public:
+public:
     Ref<Sampler> sampler_create(const SamplerState &p_state);
     void sampler_free(Ref<Sampler> p_sampler);
 
-   public:
+public:
     /* render pass */
     Ref<RenderPass> render_pass_create(Vector<Attachment> &p_attachments,
                                        Vector<Subpass> &p_subpasses,
@@ -99,7 +99,7 @@ class RenderingDeviceDriver {
                                           Vector<VkClearAttachment> p_attachment_clears,
                                           Vector<VkRect2D> p_rects);
 
-   public:
+public:
     /* swapchain */
     Ref<Swapchain> swapchain_create(Surface &p_surface);
     Error swapchain_resize(Ref<Swapchain> p_old_swapchain = nullptr);
@@ -108,7 +108,7 @@ class RenderingDeviceDriver {
                                       VkColorSpaceKHR &p_color_space);
     void swapchain_free(Ref<Swapchain> p_swapchain);
 
-   public:
+public:
     /* framebuffer */
     Ref<Framebuffer> framebuffer_create(Ref<RenderPass> p_render_pass,
                                         Vector<Ref<Texture>> p_attachments, uint32_t p_width,
@@ -123,6 +123,59 @@ class RenderingDeviceDriver {
     /* semaphore */
     Ref<Semaphore> semaphore_create();
     void semaphore_free(Ref<Semaphore> p_semaphore);
+
+    //  /* queues */
+    // private:
+    //  struct CommandQueue : RefTarget<CommandQueue> {
+    //      Vector<VkSemaphore> image_semaphores;
+    //      Vector<Swapchain> image_semaphores_swapchains;
+    //      Vector<uint32_t> pending_semaphores_for_execute;
+    //      Vector<uint32_t> pending_semaphores_for_fences;
+    //      Vector<uint32_t> free_image_semaphores;
+    //      Vector<std::pair<Ref<Fence>, uint32_t>> imageimage_semaphores_for_fences;
+    //      uint32_t queue_family = 0;
+    //      uint32_t queue_index = 0;
+    //  };
+    //
+    // public:
+    //  Ref<CommandQueue> command_queue_create(uint32_t p_cmd_queue_family,
+    //                                         bool p_identify_as_main_queue = false);
+    //  Error command_queue_execute_and_present(Ref<CommandQueue>,
+    //                                          Vector<Ref<Semaphore>> p_wait_semaphores,
+    //                                          Vector<Ref<CommandBuffer>> p_cmd_buffers,
+    //                                          Vector<Ref<Semaphore>> p_cmd_semaphores);
+    //  void command_queue_free(Ref<CommandQueue> p_cmd_queue);
+    //
+    // private:
+    //  /* uniform sets */
+    //  using DescriptorSetPools = HashMap<uint32_t, HashMap<VkDescriptorPool, uint32_t>>;
+    //  DescriptorSetPools descriptor_set_pools;
+    //  uint32_t max_descriptor_sets_per_pool = 0;
+    //
+    //  VkDescriptorPool _descriptor_set_pool_create(const uint32_t &p_key);
+    //  void _descriptor_set_pool_unreference(VkDescriptorPool p_vk_descriptor_pool);
+    //
+    // public:
+    //  struct BoundUniform {
+    //      VkDescriptorType type = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+    //      uint32_t binding = 0xffffffff;
+    //      bool immutable_sampler = false;
+    //      Vector<uint32_t> ids;
+    //
+    //      _FORCE_INLINE_ bool is_dynamic() const {
+    //          return type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC ||
+    //                 type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    //      }
+    //  };
+    //
+    //  struct UniformSet : Ref<UniformSet> {
+    //      VkDescriptorSet vk_descriptor_set = VK_NULL_HANDLE;
+    //      VkDescriptorPool vk_descriptor_pool = VK_NULL_HANDLE;
+    //      Vector<Ref<Buffer>> dynamic_buffers;
+    //  };
+    //
+    //  Ref<UniformSet> uniform_set_create(Vector<BoundUniform> p_uniforms);
+    //  void uniform_set_free(Ref<UniformSet> p_uniform_set);
 
     /* commands */
     // command pool
@@ -139,7 +192,7 @@ class RenderingDeviceDriver {
     void command_buffer_execute_secondary(Ref<CommandBuffer> p_cmd_buffer,
                                           Vector<Ref<CommandBuffer>> p_secondary_cmd_buffers);
 
-   public:
+public:
     /* pipeline */
     Ref<RenderPipeline> render_pipeline_create(
         String program_name, VkPrimitiveTopology p_render_primitive,
@@ -149,7 +202,7 @@ class RenderingDeviceDriver {
         Vector<int32_t> p_color_attachments, Vector<VkDynamicState> p_dynamic_state,
         Ref<RenderPass> p_render_pass, uint32_t p_render_subpass);
 
-   public:
+public:
     RenderingDeviceDriver(RenderingDriverContext *p_context_driver);
     ~RenderingDeviceDriver();
 };

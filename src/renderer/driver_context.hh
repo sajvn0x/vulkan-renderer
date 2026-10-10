@@ -7,7 +7,7 @@
 #include "types.hh"
 
 class RenderingDriverContext {
-   private:
+private:
     struct DeviceQueueFamilies {
         Vector<VkQueueFamilyProperties> properties;
     };
@@ -29,7 +29,7 @@ class RenderingDriverContext {
     Error _initialize_instance();
     Error _initialize_devices();
 
-   public:
+public:
     Error initialize();
     const Device& device_get(uint32_t p_device_index);
     uint32_t device_get_count() const;
