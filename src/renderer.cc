@@ -25,10 +25,46 @@ Error Renderer::initialize(GLFWwindow* window) {
     err = driver_device->initialize(physical_device_index, frame_count);
     ERR_FAIL_COND_V(err != OK, err);
 
-    driver_device->swapchain_create(surface);
+    // swapchain
+    swapchain = driver_device->swapchain_create(surface);
+    ERR_FAIL_COND_V_MSG(err != OK, ERR_CANT_CREATE, "Failed to create swapchain");
+
+    // command pool
+    // TODO: replace it with a VALID graphics queue index
+    primary_command_pool = driver_device->command_pool_create(0, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    ERR_FAIL_COND_V_MSG(primary_command_pool == nullptr, ERR_CANT_CREATE,
+                        "Failed to create primary command pool");
+
+    // command queue
+    command_queue = driver_device->command_queue_create(0);
+    in_flight_fence = driver_device->fence_create();
+
+    uint32_t swapchain_image_count = swapchain->images.size();
+    cmd_buffers.resize(swapchain_image_count);
+    for (uint32_t i = 0; i < swapchain_image_count; ++i) {
+        cmd_buffers.push_back(driver_device->command_buffer_create(primary_command_pool));
+    }
 
     return OK;
 }
+
+void Renderer::begin_frame() {
+    // driver_device->fence_wait(in_flight_fence);
+    // // acquire the swapchain images
+    // driver_device->swapchain_acquire_next_image(swapchain,
+    // command_queue->image_available_semaphore,
+    //                                             in_flight_fence);
+    // uint32_t image_index = swapchain->image_index;
+    //
+    //    Ref<CommandBuffer> cmd_buffer = cmd_buffers[image_index];
+    //    driver_device->command_buffer_begin(cmd_buffer);
+    //    driver_device->command_buffer_end(cmd_buffer);
+    //
+    //    driver_device->command_queue_execute_and_present(command_queue, in_flight_fence,
+    //    swapchain,
+}
+
+void Renderer::next_frame() {}
 
 uint32_t Renderer::_choose_physical_device() {
     HashMap<uint32_t, uint32_t> scores;
@@ -69,10 +105,8 @@ uint32_t Renderer::_choose_physical_device() {
     return best_index;
 }
 
-void Renderer::begin_frame() {}
-
-void Renderer::next_frame() {}
-
 Renderer::Renderer() {}
 
-Renderer::~Renderer() {}
+Renderer::~Renderer() {
+    if (swapchain) driver_device->swapchain_free(swapchain);
+}

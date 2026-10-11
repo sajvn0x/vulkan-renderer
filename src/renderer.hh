@@ -3,6 +3,7 @@
 #include "core/error/error_list.hh"
 #include "renderer/driver_context.hh"
 #include "renderer/driver_device.hh"
+#include "renderer/types.hh"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -11,6 +12,12 @@ class Renderer {
     RenderingDriverContext* driver_context = nullptr;
     RenderingDeviceDriver* driver_device = nullptr;
     Surface surface;
+    Ref<Swapchain> swapchain = nullptr;
+    Ref<CommandPool> primary_command_pool = nullptr;
+
+    Ref<CommandQueue> command_queue = nullptr;
+    Ref<Fence> in_flight_fence = nullptr;
+    Vector<Ref<CommandBuffer>> cmd_buffers;
 
 private:
     uint32_t _choose_physical_device();

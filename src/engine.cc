@@ -8,11 +8,10 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 }
 
 void Engine::run() {
-    renderer->begin_frame();
-
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         glfwSetKeyCallback(window, key_callback);
+        renderer->begin_frame();
         renderer->next_frame();
     }
 }

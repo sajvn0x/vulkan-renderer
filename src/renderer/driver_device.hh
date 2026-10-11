@@ -1,5 +1,7 @@
 #pragma once
 
+#include <mutex>
+
 #include "core/containers.hh"
 #include "core/error/error_list.hh"
 #include "display.hh"
@@ -10,6 +12,7 @@ class RenderingDeviceDriver {
     struct Queue {
         VkQueue queue = VK_NULL_HANDLE;
         uint32_t virtual_count = 0;
+        // std::mutex submit_mutex;
     };
 
     VkDevice vk_device = VK_NULL_HANDLE;
@@ -34,9 +37,12 @@ class RenderingDeviceDriver {
     StorageBufferCapabilities storage_buffer_capabilities;
 
     bool buffer_device_address_support = false;
-    bool pipeline_cache_control_support = false;
     bool vulkan_memory_model_support = false;
     bool vulkan_memory_model_device_scope_support = false;
+    AccelerationStructureCapabilities acceleration_structure_capabilities;
+    bool ray_query_support = false;
+    RaytracingCapabilities raytracing_capabilities;
+    bool pipeline_cache_control_support = false;
     bool device_fault_support = false;
     bool framebuffer_depth_resolve = false;
 
@@ -59,17 +65,31 @@ public:
 private:
     /* Memory */
     VmaAllocator allocator = nullptr;
+    HashMap<uint32_t, VmaPool> small_allocs_pools;
+
+    VmaPool _find_or_create_small_allocs_pool(uint32_t p_mem_type_index);
 
 public:
+    enum MemoryAllocationType {
+        MEMORY_ALLOCATION_TYPE_CPU,
+        MEMORY_ALLOCATION_TYPE_GPU,
+        MEMORY_ALLOCATION_TYPE_GPU_MAPPABLE,
+    };
+
     /* buffers */
     Ref<Buffer> buffer_create(uint64_t p_size, VkBufferUsageFlags p_usage,
-                              VmaMemoryUsage p_vma_usage);
+                              MemoryAllocationType p_allocation_type);
+    bool buffer_set_texel_format(Ref<Buffer> p_buffer, VkFormat p_format);
     void buffer_free(Ref<Buffer> p_buffer, VkFormat p_format);
     uint64_t buffer_get_allocation_size(Ref<Buffer> p_buffer);
     uint8_t *buffer_map(Ref<Buffer> p_buffer);
     void buffer_unmap(Ref<Buffer> p_buffer);
+    uint64_t buffer_get_device_address(Ref<Buffer> p_buffer);
 
     /* texture */
+    VkSampleCountFlagBits _ensure_supported_sample_count(
+        VkSampleCountFlagBits p_requested_sample_count);
+
 public:
     Ref<Texture> texture_create(const TextureFormat &p_format, const TextureView &p_view);
     void texture_free(Ref<Texture> p_texture);
@@ -78,6 +98,7 @@ public:
 public:
     Ref<Sampler> sampler_create(const SamplerState &p_state);
     void sampler_free(Ref<Sampler> p_sampler);
+    bool sampler_is_format_supported_for_filter(VkFormat p_format, VkFilter p_filter);
 
 public:
     /* render pass */
@@ -103,6 +124,8 @@ public:
     /* swapchain */
     Ref<Swapchain> swapchain_create(Surface &p_surface);
     Error swapchain_resize(Ref<Swapchain> p_old_swapchain = nullptr);
+    void swapchain_acquire_next_image(Ref<Swapchain> p_swapchain, Ref<Semaphore> p_semaphore,
+                                      Ref<Fence> p_fence);
     Ref<Framebuffer> swapchain_acquire_framebuffer();
     bool _determine_swap_chain_format(Surface &p_surface, VkFormat &p_format,
                                       VkColorSpaceKHR &p_color_space);
@@ -123,6 +146,14 @@ public:
     /* semaphore */
     Ref<Semaphore> semaphore_create();
     void semaphore_free(Ref<Semaphore> p_semaphore);
+
+private:
+public:
+    Ref<CommandQueue> command_queue_create(int p_cmd_queue_family);
+    Error command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, Ref<Fence> p_fence,
+                                            Ref<Swapchain> p_swapchain,
+                                            Vector<Ref<CommandBuffer>> p_cmd_buffers);
+    void command_queue_free(Ref<CommandQueue> p_cmd_queue);
 
     //  /* queues */
     // private:

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
+#include <volk.h>
 
 #include <cstdint>
 
@@ -82,6 +82,20 @@ struct StorageBufferCapabilities {
     bool storage_input_output_16 = false;
 };
 
+struct AccelerationStructureCapabilities {
+    bool acceleration_structure_support = false;
+    uint32_t min_acceleration_structure_scratch_offset_alignment = 0;
+};
+
+struct RaytracingCapabilities {
+    bool raytracing_pipeline_support = false;
+    uint32_t shader_group_handle_size = 0;
+    uint32_t shader_group_handle_alignment = 0;
+    uint32_t shader_group_handle_size_aligned = 0;
+    uint32_t shader_group_base_alignment = 0;
+    bool validation = false;
+};
+
 struct MultiviewCapabilities {
     bool is_supported = false;
     bool geometry_shader_is_supported = false;
@@ -118,9 +132,13 @@ struct Buffer : public RefTarget<Buffer> {
         uint64_t size = UINT64_MAX;
     } allocation;
     uint64_t size = 0;
-    VkBufferUsageFlags usage = 0;
     VkBufferView vk_view = VK_NULL_HANDLE;
-    void *mapped_data = nullptr;
+    uint32_t frame_idx = UINT32_MAX;
+
+    // only valid when the buffer is dynamic
+    uint8_t *persistant_ptr = nullptr;
+
+    bool is_dynamic() const { return frame_idx != UINT32_MAX; }
 };
 
 /* texture */
@@ -288,6 +306,13 @@ struct Swapchain : RefTarget<Swapchain> {
     Vector<Ref<Framebuffer>> framebuffers;
     VkRenderPass vk_render_pass = VK_NULL_HANDLE;
     uint32_t image_index = 0;
+};
+
+struct CommandQueue : RefTarget<CommandQueue> {
+    Ref<Semaphore> image_available_semaphore;
+    Ref<Semaphore> render_finished_semaphore;
+    uint32_t queue_family = 0;
+    uint32_t queue_index = 0;
 };
 
 /* shader */
