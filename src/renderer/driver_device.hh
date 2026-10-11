@@ -8,6 +8,8 @@
 #include "driver_context.hh"
 #include "types.hh"
 
+#define MAX_FRAMES_IN_FLIGHT 2
+
 class RenderingDeviceDriver {
     struct Queue {
         VkQueue queue = VK_NULL_HANDLE;
@@ -148,11 +150,14 @@ public:
     void semaphore_free(Ref<Semaphore> p_semaphore);
 
 private:
+    uint32_t command_queue_family_get();
+
 public:
     Ref<CommandQueue> command_queue_create(int p_cmd_queue_family);
     Error command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, Ref<Fence> p_fence,
                                             Ref<Swapchain> p_swapchain,
-                                            Vector<Ref<CommandBuffer>> p_cmd_buffers);
+                                            Ref<CommandBuffer> p_cmd_buffer,
+                                            uint32_t p_frame_index);
     void command_queue_free(Ref<CommandQueue> p_cmd_queue);
 
     //  /* queues */

@@ -1013,29 +1013,38 @@ void RDD::framebuffer_free(Ref<Framebuffer> p_framebuffer) {
     vkDestroyFramebuffer(vk_device, p_framebuffer->vk_framebuffer, nullptr);
 }
 
+uint32_t RDD::command_queue_family_get() { return 0; }
+
 Ref<CommandQueue> RDD::command_queue_create(int p_cmd_queue_family) {
     Ref<CommandQueue> cmd_queue = new CommandQueue();
 
     cmd_queue->queue_family = p_cmd_queue_family;
-    cmd_queue->image_available_semaphore = semaphore_create();
-    cmd_queue->render_finished_semaphore = semaphore_create();
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        Ref<Semaphore> image_available_semaphore = semaphore_create();
+        ERR_FAIL_COND_V_MSG(image_available_semaphore == nullptr, nullptr,
+                            "Failed to create semaphore");
+        cmd_queue->image_available_semaphores.push_back(image_available_semaphore);
+
+        Ref<Semaphore> render_finished_semaphore = semaphore_create();
+        ERR_FAIL_COND_V_MSG(render_finished_semaphore == nullptr, nullptr,
+                            "Failed to create semaphore");
+        cmd_queue->render_finished_semaphores.push_back(render_finished_semaphore);
+    }
 
     return cmd_queue;
 }
 
 Error RDD::command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, Ref<Fence> p_fence,
                                              Ref<Swapchain> p_swapchain,
-                                             Vector<Ref<CommandBuffer>> p_cmd_buffers) {
+                                             Ref<CommandBuffer> p_cmd_buffer,
+                                             uint32_t p_frame_index) {
     // TODO: choose the value queue
-    VkQueue queue = queue_families[0][0].queue;
+    VkQueue queue = queue_families[p_cmd_queue->queue_family][p_cmd_queue->queue_index].queue;
     VkFence fence = p_fence->vk_fence;
-    VkSemaphore image_available_semaphore = p_cmd_queue->image_available_semaphore->vk_semaphore;
-    VkSemaphore render_finished_semaphore = p_cmd_queue->render_finished_semaphore->vk_semaphore;
-
-    Vector<VkCommandBuffer> command_buffers;
-    for (uint32_t i = 0; i < p_cmd_buffers.size(); i++) {
-        command_buffers.push_back(p_cmd_buffers[i]->vk_command_buffer);
-    }
+    VkSemaphore image_available_semaphore =
+        p_cmd_queue->image_available_semaphores[p_frame_index]->vk_semaphore;
+    VkSemaphore render_finished_semaphore =
+        p_cmd_queue->render_finished_semaphores[p_frame_index]->vk_semaphore;
 
     VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
@@ -1045,7 +1054,7 @@ Error RDD::command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, Ref<
     submit_info.pWaitSemaphores = &image_available_semaphore;
     submit_info.pWaitDstStageMask = wait_stages;
     submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = command_buffers.data();
+    submit_info.pCommandBuffers = &p_cmd_buffer->vk_command_buffer;
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores = &render_finished_semaphore;
 

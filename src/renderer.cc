@@ -30,38 +30,44 @@ Error Renderer::initialize(GLFWwindow* window) {
     ERR_FAIL_COND_V_MSG(err != OK, ERR_CANT_CREATE, "Failed to create swapchain");
 
     // command pool
-    // TODO: replace it with a VALID graphics queue index
     primary_command_pool = driver_device->command_pool_create(0, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     ERR_FAIL_COND_V_MSG(primary_command_pool == nullptr, ERR_CANT_CREATE,
                         "Failed to create primary command pool");
 
     // command queue
     command_queue = driver_device->command_queue_create(0);
-    in_flight_fence = driver_device->fence_create();
+
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        Ref<Fence> fence = driver_device->fence_create();
+        ERR_FAIL_COND_V_MSG(fence == nullptr, ERR_CANT_CREATE, "Couldn't able to create fence");
+        in_flight_fences.push_back(fence);
+    }
 
     uint32_t swapchain_image_count = swapchain->images.size();
     cmd_buffers.resize(swapchain_image_count);
     for (uint32_t i = 0; i < swapchain_image_count; ++i) {
-        cmd_buffers.push_back(driver_device->command_buffer_create(primary_command_pool));
+        cmd_buffers[i] = driver_device->command_buffer_create(primary_command_pool);
     }
 
     return OK;
 }
 
 void Renderer::begin_frame() {
-    // driver_device->fence_wait(in_flight_fence);
-    // // acquire the swapchain images
-    // driver_device->swapchain_acquire_next_image(swapchain,
-    // command_queue->image_available_semaphore,
-    //                                             in_flight_fence);
-    // uint32_t image_index = swapchain->image_index;
-    //
-    //    Ref<CommandBuffer> cmd_buffer = cmd_buffers[image_index];
-    //    driver_device->command_buffer_begin(cmd_buffer);
-    //    driver_device->command_buffer_end(cmd_buffer);
-    //
-    //    driver_device->command_queue_execute_and_present(command_queue, in_flight_fence,
-    //    swapchain,
+    driver_device->fence_wait(in_flight_fences[current_frame]);
+    driver_device->swapchain_acquire_next_image(
+        swapchain, command_queue->image_available_semaphores[current_frame],
+        in_flight_fences[current_frame]);
+
+    uint32_t image_index = swapchain->image_index;
+
+    Ref<CommandBuffer> cmd_buffer = cmd_buffers[image_index];
+    driver_device->command_buffer_begin(cmd_buffer);
+    driver_device->command_buffer_end(cmd_buffer);
+
+    driver_device->command_queue_execute_and_present(command_queue, in_flight_fences[current_frame],
+                                                     swapchain, cmd_buffer, current_frame);
+
+    current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 void Renderer::next_frame() {}

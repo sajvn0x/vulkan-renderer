@@ -254,6 +254,7 @@ struct CommandPool : RefTarget<CommandPool> {
 /* render pass */
 struct RenderPass : RefTarget<RenderPass> {
     VkRenderPass vk_render_pass = VK_NULL_HANDLE;
+    bool uses_fragment_density_map = false;
 };
 
 struct Attachment {
@@ -290,6 +291,8 @@ struct SubpassDependency {
 /* framebuffer */
 struct Framebuffer : RefTarget<Framebuffer> {
     VkFramebuffer vk_framebuffer = VK_NULL_HANDLE;
+    // Only filled in if the framebuffer uses a fragment density map with offsets. Unused otherwise.
+    uint32_t fragment_density_map_offsets_layers = 0;
     VkImage swap_chain_image = VK_NULL_HANDLE;
     VkImageSubresourceRange swap_chain_image_subresource_range = {};
     bool swap_chain_acquired = false;
@@ -309,8 +312,8 @@ struct Swapchain : RefTarget<Swapchain> {
 };
 
 struct CommandQueue : RefTarget<CommandQueue> {
-    Ref<Semaphore> image_available_semaphore;
-    Ref<Semaphore> render_finished_semaphore;
+    Vector<Ref<Semaphore>> image_available_semaphores;
+    Vector<Ref<Semaphore>> render_finished_semaphores;
     uint32_t queue_family = 0;
     uint32_t queue_index = 0;
 };

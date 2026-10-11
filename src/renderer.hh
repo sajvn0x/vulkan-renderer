@@ -16,8 +16,9 @@ class Renderer {
     Ref<CommandPool> primary_command_pool = nullptr;
 
     Ref<CommandQueue> command_queue = nullptr;
-    Ref<Fence> in_flight_fence = nullptr;
+    Vector<Ref<Fence>> in_flight_fences;
     Vector<Ref<CommandBuffer>> cmd_buffers;
+    uint32_t current_frame = 0;
 
 private:
     uint32_t _choose_physical_device();
