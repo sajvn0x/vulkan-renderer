@@ -40,9 +40,10 @@ static size_t vk_format_size(VkFormat format) {
     }
 }
 
-Error ShaderProgram::load_shader_program(const String& shader_name, VkDevice vk_device) {
+Error ShaderProgram::load_shader_program(const String &shader_name, VkDevice vk_device) {
     Vector<Path> shader_files = FileSystem::find_shader_files_by_name(shader_name);
-    ERR_FAIL_COND_V(shader_files.size() > MAX_SHADER_FILES_PER_PROGRAM, FAILED);
+    ERR_FAIL_COND_V(shader_files.size() > MAX_SHADER_FILES_PER_PROGRAM || shader_files.size() == 0,
+                    FAILED);
     Error err = OK;
 
     // detect the pipeline type
@@ -52,7 +53,7 @@ Error ShaderProgram::load_shader_program(const String& shader_name, VkDevice vk_
         pipeline_type = PIPELINE_TYPE_GRAPHICS;
     };
 
-    for (Path& shader : shader_files) {
+    for (Path &shader : shader_files) {
         err = _build_shader_module_asset(shader);
         ERR_FAIL_COND_V(err != OK, err);
     }
@@ -65,56 +66,41 @@ Error ShaderProgram::load_shader_program(const String& shader_name, VkDevice vk_
         ERR_FAIL_COND_V(!has_compute_shader, err);
     }
 
-    _build_pipeline_layout(vk_device);
+    err = _build_pipeline_layout(vk_device);
+    ERR_FAIL_COND_V(err != OK, err);
+
     _build_shader_module(vk_device);
 
     return err;
 }
 
-Error ShaderProgram::_build_shader_module_asset(const String& name) {
+Error ShaderProgram::_build_shader_module_asset(const String &name) {
     Ref<ShaderModuleAsset> shader_module_asset = new ShaderModuleAsset();
 
-    ShaderReflection reflection = _shader_reflection(name);
-
-    shader_module_asset->source_path = name;
-    shader_module_asset->reflection = reflection;
-
-    shaders.push_back(shader_module_asset);
-
-    return OK;
-}
-
-ShaderReflection ShaderProgram::_shader_reflection(const String& name) {
-    ShaderReflection shader_reflection = {};
-
     SpirvFileResult file_result = FileSystem::read_spirv_file(name);
-    ERR_FAIL_COND_V(!file_result.success, shader_reflection);
+    ERR_FAIL_COND_V(!file_result.success, FAILED);
 
-    // spirv source
-    shader_reflection.source = file_result.content.data();
-    shader_reflection.source_size = file_result.size;
+    shader_module_asset->source.resize(file_result.size);
+    shader_module_asset->source = file_result.content;
+    shader_module_asset->source_size = file_result.size;
+    shader_module_asset->source_path = name;
+    shader_module_asset->reflection = spv_reflect::ShaderModule(shader_module_asset->source_size,
+                                                                shader_module_asset->source.data());
 
-    spv_reflect::ShaderModule shader_module =
-        spv_reflect::ShaderModule(shader_reflection.source_size, shader_reflection.source);
+    ERR_FAIL_COND_V(shader_module_asset->reflection.GetResult() != SPV_REFLECT_RESULT_SUCCESS,
+                    FAILED);
 
-    ERR_FAIL_COND_V(shader_module.GetResult() != SPV_REFLECT_RESULT_SUCCESS, shader_reflection);
+    spv_reflect::ShaderModule &shader_module = shader_module_asset->reflection;
 
-    // entry point
-    shader_reflection.entry_point = shader_module.GetEntryPointName();
-
-    // shader stage
-    VkShaderStageFlagBits stage = (VkShaderStageFlagBits)shader_module.GetShaderStage();
-    ERR_FAIL_COND_V_MSG(stage > VK_SHADER_STAGE_COMPUTE_BIT, shader_reflection,
-                        "For now, we only support primitive shaders, and compute shaders");
-    shader_reflection.stage = stage;
+    VkShaderStageFlags stage = (VkShaderStageFlagBits)shader_module.GetShaderStage();
 
     // input variables (vertex only)
     uint32_t input_variable_count = 0;
     shader_module.EnumerateInputVariables(&input_variable_count, nullptr);
-    Vector<SpvReflectInterfaceVariable*> input_variables(input_variable_count);
+    Vector<SpvReflectInterfaceVariable *> input_variables(input_variable_count);
     shader_module.EnumerateInputVariables(&input_variable_count, input_variables.data());
 
-    switch (shader_reflection.stage) {
+    switch (stage) {
         case (VK_SHADER_STAGE_VERTEX_BIT):
             has_vertex_shader = true;
             _build_vertex_info(input_variables);
@@ -139,71 +125,64 @@ ShaderReflection ShaderProgram::_shader_reflection(const String& name) {
     // descriptor sets
     uint32_t descriptor_set_count = 0;
     shader_module.EnumerateDescriptorSets(&descriptor_set_count, nullptr);
-    Vector<SpvReflectDescriptorSet*> descriptor_sets(descriptor_set_count);
-    if (descriptor_set_count > 0) {
-        shader_module.EnumerateDescriptorSets(&descriptor_set_count, descriptor_sets.data());
-    }
+    if (descriptor_set_count != 0) {
+        Vector<SpvReflectDescriptorSet *> spv_descriptor_sets(descriptor_set_count);
+        shader_module.EnumerateDescriptorSets(&descriptor_set_count, spv_descriptor_sets.data());
 
-    for (SpvReflectDescriptorSet* set : descriptor_sets) {
-        DescriptorSet descriptor_set = {};
-        descriptor_set.set = set->set;
+        for (SpvReflectDescriptorSet *spv_descriptor_set : spv_descriptor_sets) {
+            DescriptorSet descriptor_set = {};
+            shader_module_asset->descriptor_sets[spv_descriptor_set->set] = {};
 
-        for (uint32_t i = 0; i < set->binding_count; i++) {
-            const SpvReflectDescriptorBinding* reflected = set->bindings[i];
+            for (uint32_t i = 0; i < spv_descriptor_set->binding_count; ++i) {
+                DescriptorBinding binding = {};
 
-            DescriptorBinding binding = {};
+                binding.binding = spv_descriptor_set->bindings[i]->binding;
+                binding.descriptor_count = spv_descriptor_set->bindings[i]->count;
+                binding.descriptor_type =
+                    (VkDescriptorType)spv_descriptor_set->bindings[i]->descriptor_type;
+                binding.stage_flag = stage;
 
-            binding.layout.binding = reflected->binding;
-            binding.layout.descriptorType =
-                static_cast<VkDescriptorType>(reflected->descriptor_type);
-
-            uint32_t descriptor_count = 1;
-            for (uint32_t d = 0; d < reflected->array.dims_count; d++)
-                descriptor_count *= reflected->array.dims[d];
-
-            binding.layout.descriptorCount = descriptor_count;
-            binding.layout.stageFlags = stage;
-            binding.layout.pImmutableSamplers = nullptr;
-
-            binding.name = reflected->name ? reflected->name : "";
-            binding.size = reflected->block.size;
-
-            descriptor_set.bindings.push_back(binding);
+                shader_module_asset->descriptor_sets[spv_descriptor_set->set]
+                    .bindings[spv_descriptor_set->bindings[i]->binding] = binding;
+            }
         }
-
-        shader_reflection.descriptor_sets.push_back(descriptor_set);
     }
 
     // push constants
-    uint32_t push_constant_count = 0;
-    shader_module.EnumeratePushConstantBlocks(&push_constant_count, nullptr);
-    Vector<SpvReflectBlockVariable*> push_constants(push_constant_count);
-    if (push_constant_count > 0) {
-        shader_module.EnumeratePushConstantBlocks(&push_constant_count, push_constants.data());
+    uint32_t push_constants_count = 0;
+    shader_module.EnumeratePushConstantBlocks(&push_constants_count, nullptr);
+    if (push_constants_count > 0) {
+        Vector<SpvReflectBlockVariable *> push_constants(push_constants_count);
+        shader_module.EnumeratePushConstantBlocks(&push_constants_count, push_constants.data());
+
+        for (SpvReflectBlockVariable *pc : push_constants) {
+            PushConstantRange range = {};
+
+            range.vk_range.stageFlags = stage;
+            range.vk_range.offset = pc->offset;
+            range.vk_range.size = pc->size;
+
+            range.name = pc->name ? pc->name : "";
+            shader_module_asset->push_constants.push_back(range);
+        }
     }
-    for (SpvReflectBlockVariable* pc : push_constants) {
-        PushConstantRange range = {};
 
-        range.vk_range.stageFlags = stage;
-        range.vk_range.offset = pc->offset;
-        range.vk_range.size = pc->size;
+    shader_module_asset->stage = stage;
+    shader_module_asset->entry_point = shader_module.GetEntryPointName();
+    shaders.push_back(shader_module_asset);
 
-        range.name = pc->name ? pc->name : "";
-        shader_reflection.push_constants.push_back(range);
-    }
-
-    return shader_reflection;
+    return OK;
 }
 
-void ShaderProgram::_build_vertex_info(Vector<SpvReflectInterfaceVariable*>& variables) {
+void ShaderProgram::_build_vertex_info(Vector<SpvReflectInterfaceVariable *> &variables) {
     Vector<VkVertexInputAttributeDescription> attributes;
 
     uint32_t offset = 0;
 
     std::sort(variables.begin(), variables.end(),
-              [](auto* a, auto* b) { return a->location < b->location; });
+              [](auto *a, auto *b) { return a->location < b->location; });
 
-    for (SpvReflectInterfaceVariable* variable : variables) {
+    for (SpvReflectInterfaceVariable *variable : variables) {
         if (variable->built_in != -1) continue;
 
         VkVertexInputAttributeDescription attr = {};
@@ -238,58 +217,63 @@ void ShaderProgram::_build_vertex_info(Vector<SpvReflectInterfaceVariable*>& var
     vk_vertex_info.vk_state = input_state_create_info;
 }
 
-void ShaderProgram::_build_pipeline_layout(VkDevice vk_device) {
-    HashMap<uint32_t, Vector<VkDescriptorSetLayoutBinding>> set_bindings;
+Error ShaderProgram::_build_pipeline_layout(VkDevice vk_device) {
+    HashMap<uint32_t, HashMap<uint32_t, VkDescriptorSetLayoutBinding>> set_bindings;
     Vector<VkPushConstantRange> push_constant_ranges;
 
-    uint32_t max_set = 0;
-
-    for (const Ref<ShaderModuleAsset>& shader : shaders) {
-        const ShaderReflection& reflection = shader->reflection;
+    for (const Ref<ShaderModuleAsset> &shader : shaders) {
+        VkShaderStageFlags shader_stage = shader->stage;
 
         // descriptor sets
-        for (const DescriptorSet& set : reflection.descriptor_sets) {
-            max_set = std::max(max_set, set.set);
+        for (const auto &[set_index, descriptor_set] : shader->descriptor_sets) {
+            auto &bindings = set_bindings[set_index];
 
-            auto& bindings = set_bindings[set.set];
+            for (const auto &[binding_index, descriptor_binding] : descriptor_set.bindings) {
+                auto it = bindings.find(binding_index);
+                if (it != bindings.end()) {
+                    auto &existing = it->second;
 
-            for (const DescriptorBinding& binding : set.bindings) {
-                bool found = false;
-
-                for (auto& existing : bindings) {
-                    if (existing.binding == binding.layout.binding) {
-                        existing.stageFlags |= binding.layout.stageFlags;
-
-                        found = true;
-                        ERR_FAIL_COND(existing.descriptorType != binding.layout.descriptorType);
-                        ERR_FAIL_COND(existing.descriptorCount != binding.layout.descriptorCount);
-
-                        break;
+                    if (existing.descriptorType != descriptor_binding.descriptor_type ||
+                        existing.descriptorCount != descriptor_binding.descriptor_count) {
+                        ERR_FAIL_V_MSG(FAILED,
+                                       "Incompatible descriptors were used across shader program");
                     }
-                }
 
-                if (!found) {
-                    bindings.push_back(binding.layout);
+                    existing.stageFlags |= shader_stage;
+
+                } else {
+                    VkDescriptorSetLayoutBinding binding = {};
+                    binding.binding = descriptor_binding.binding;
+                    binding.descriptorType = descriptor_binding.descriptor_type;
+                    binding.descriptorCount = descriptor_binding.descriptor_count;
+                    binding.stageFlags = shader_stage;
+
+                    bindings[binding_index] = binding;
                 }
             }
         }
-
-        // push constants
-        for (const PushConstantRange& range : reflection.push_constants) {
-            push_constant_ranges.push_back(range.vk_range);
-        }
     }
 
-    for (auto& [set_index, bindings] : set_bindings) {
-        VkDescriptorSetLayoutCreateInfo layout_info = {};
+    descriptor_set_layouts.resize(set_bindings.size());
+
+    for (const auto &[set_index, bindings] : set_bindings) {
+        Vector<VkDescriptorSetLayoutBinding> layout_bindings;
+
+        for (const auto &[binding_index, binding] : bindings) {
+            layout_bindings.push_back(binding);
+        }
+
+        VkDescriptorSetLayoutCreateInfo layout_info{};
         layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layout_info.bindingCount = static_cast<uint32_t>(bindings.size());
-        layout_info.pBindings = bindings.data();
+        layout_info.bindingCount = static_cast<uint32_t>(layout_bindings.size());
+        layout_info.pBindings = layout_bindings.data();
 
-        VkResult result = vkCreateDescriptorSetLayout(vk_device, &layout_info, nullptr,
-                                                      &descriptor_set_layouts[set_index]);
+        VkDescriptorSetLayout layout = VK_NULL_HANDLE;
 
-        ERR_FAIL_COND(result != VK_SUCCESS);
+        VkResult result = vkCreateDescriptorSetLayout(vk_device, &layout_info, nullptr, &layout);
+        ERR_FAIL_COND_V_MSG(result, FAILED, "Failed to create descriptor set layout");
+
+        descriptor_set_layouts[set_index] = layout;
     }
 
     VkPipelineLayoutCreateInfo pipeline_create_info = {};
@@ -303,21 +287,21 @@ void ShaderProgram::_build_pipeline_layout(VkDevice vk_device) {
 
     VkResult result =
         vkCreatePipelineLayout(vk_device, &pipeline_create_info, nullptr, &vk_pipeline_layout);
-    ERR_FAIL_COND(result != VK_SUCCESS);
+    ERR_FAIL_COND_V_MSG(result, FAILED, "Failed to create pipeline layout");
+
+    return OK;
 }
 
 void ShaderProgram::_build_shader_module(VkDevice vk_device) {
     VkShaderModule shader_module = VK_NULL_HANDLE;
 
-    for (const Ref<ShaderModuleAsset>& shader : shaders) {
-        ShaderReflection reflection = shader->reflection;
-
+    for (const Ref<ShaderModuleAsset> &shader : shaders) {
         VkShaderModuleCreateInfo shader_module_create_info = {};
         shader_module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         shader_module_create_info.pNext = nullptr;
         shader_module_create_info.flags = 0;
-        shader_module_create_info.codeSize = reflection.source_size;
-        shader_module_create_info.pCode = reflection.source;
+        shader_module_create_info.codeSize = shader->source_size;
+        shader_module_create_info.pCode = shader->source.data();
 
         VkResult result =
             vkCreateShaderModule(vk_device, &shader_module_create_info, nullptr, &shader_module);
@@ -328,9 +312,9 @@ void ShaderProgram::_build_shader_module(VkDevice vk_device) {
         shader_stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shader_stage_create_info.pNext = nullptr;
         shader_stage_create_info.flags = 0;
-        shader_stage_create_info.stage = (VkShaderStageFlagBits)reflection.stage;
+        shader_stage_create_info.stage = (VkShaderStageFlagBits)shader->stage;
         shader_stage_create_info.module = shader_module;
-        shader_stage_create_info.pName = reflection.entry_point.c_str();
+        shader_stage_create_info.pName = shader->entry_point.c_str();
 
         vk_pipeline_stages.push_back(shader_stage_create_info);
     }

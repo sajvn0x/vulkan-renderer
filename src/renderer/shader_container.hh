@@ -13,14 +13,15 @@ enum PipelineType {
 };
 
 struct DescriptorBinding {
-    VkDescriptorSetLayoutBinding layout;
+    uint32_t binding;
+    VkDescriptorType descriptor_type;
+    uint32_t descriptor_count;
+    VkShaderStageFlags stage_flag;
     String name;
-    uint32_t size = 0;
 };
 
 struct DescriptorSet {
-    uint32_t set = 0;
-    Vector<DescriptorBinding> bindings;
+    HashMap<uint32_t, DescriptorBinding> bindings;
 };
 
 struct PushConstantRange {
@@ -44,29 +45,31 @@ struct SpecializationInfo {
     VkSpecializationInfo vk_info = {};
 };
 
-struct ShaderReflection {
-    VkShaderStageFlags stage;
-    uint32_t* source;
-    uint32_t source_size = 0;
+struct ShaderModuleAsset : RefTarget<ShaderModuleAsset> {
+    Vector<uint32_t> source;
+    uint32_t source_size;
     String source_path;
     String entry_point = "main";
-    Vector<DescriptorSet> descriptor_sets;
+    spv_reflect::ShaderModule reflection;
+
+    VkShaderStageFlags stage;
+    VkShaderModule vk_module = VK_NULL_HANDLE;
+    HashMap<uint32_t, DescriptorSet> descriptor_sets;
     Vector<PushConstantRange> push_constants;
     Vector<SpecializationConstant> specialization_constants;
-};
 
-struct ShaderModuleAsset : RefTarget<ShaderModuleAsset> {
-    String source_path;
-    ShaderReflection reflection;
-    VkShaderModule vk_module = VK_NULL_HANDLE;
     uint64_t last_write_time = 0;
     bool dirty = false;
-    Vector<String> dependencies;
 
     bool reflect();
     bool reload();
 };
 
+/*
+
+pipeline layout going to be created after we extracted the from every shader
+
+*/
 struct ShaderProgram : RefTarget<ShaderProgram> {
     PipelineType pipeline_type = PIPELINE_TYPE_GRAPHICS;
     Vector<Ref<ShaderModuleAsset>> shaders;
@@ -91,8 +94,7 @@ struct ShaderProgram : RefTarget<ShaderProgram> {
 
 private:
     Error _build_shader_module_asset(const String& name);
-    ShaderReflection _shader_reflection(const String& name);
     void _build_vertex_info(Vector<SpvReflectInterfaceVariable*>& variables);
-    void _build_pipeline_layout(VkDevice vk_device);
+    Error _build_pipeline_layout(VkDevice vk_device);
     void _build_shader_module(VkDevice vk_device);
 };

@@ -15,6 +15,10 @@ if(NOT TARGET Vulkan::Headers)
     )
 endif()
 
+execute_process(
+	COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/scripts/compile_shader.sh"
+)
+
 add_subdirectory(library/volk)
 add_subdirectory(library/vma)
 add_subdirectory(library/glfw)
