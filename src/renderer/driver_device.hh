@@ -117,18 +117,6 @@ public:
                                        Vector<SubpassDependency> &p_subpass_dependencies);
     void render_pass_free(Ref<RenderPass> p_render_pass);
 
-    void command_begin_render_pass(Ref<CommandBuffer> p_cmd_buffer, VkRenderPass p_render_pass,
-                                   Ref<Framebuffer> p_framebuffer, VkCommandBufferLevel p_cmd_level,
-                                   const VkRect2D &p_rect, Vector<VkClearValue> p_clear_values);
-    void command_end_render_pass(Ref<CommandBuffer> p_cmd_buffer);
-    void command_next_render_subpass(Ref<CommandBuffer> p_cmd_buffer,
-                                     VkCommandBufferLevel p_cmd_level);
-    void command_render_set_viewport(Ref<CommandBuffer> p_cmd_buffer, Vector<VkRect2D> p_viewports);
-    void command_render_set_scissor(Ref<CommandBuffer> p_cmd_buffer, Vector<VkRect2D> p_scissors);
-    void command_render_clear_attachments(Ref<CommandBuffer> p_cmd_buffer,
-                                          Vector<VkClearAttachment> p_attachment_clears,
-                                          Vector<VkRect2D> p_rects);
-
 public:
     /* swapchain */
     Ref<Swapchain> swapchain_create(Surface &p_surface);
@@ -207,6 +195,57 @@ public:
         PipelineDepthStencilState p_depth_stencil_state, PipelineColorBlendState p_blend_state,
         Vector<int32_t> p_color_attachments, Vector<VkDynamicState> p_dynamic_state,
         VkRenderPass p_render_pass, uint32_t p_render_subpass);
+
+    /* commands */
+    void command_begin_render_pass(Ref<CommandBuffer> p_cmd_buffer, VkRenderPass p_render_pass,
+                                   Ref<Framebuffer> p_framebuffer, VkCommandBufferLevel p_cmd_level,
+                                   const VkRect2D &p_rect, Vector<VkClearValue> p_clear_values);
+    void command_end_render_pass(Ref<CommandBuffer> p_cmd_buffer);
+    void command_next_render_subpass(Ref<CommandBuffer> p_cmd_buffer,
+                                     VkCommandBufferLevel p_cmd_level);
+    void command_render_set_viewport(Ref<CommandBuffer> p_cmd_buffer, Vector<VkRect2D> p_viewports);
+    void command_render_set_scissor(Ref<CommandBuffer> p_cmd_buffer, Vector<VkRect2D> p_scissors);
+    void command_render_clear_attachments(Ref<CommandBuffer> p_cmd_buffer,
+                                          Vector<VkClearAttachment> p_attachment_clears,
+                                          Vector<VkRect2D> p_rects);
+
+    // binding
+    void command_bind_render_pipeline(Ref<CommandBuffer> p_cmd_buffer,
+                                      Ref<RenderPipeline> p_render_pipeline);
+    void command_bind_render_uniform_sets(Ref<CommandBuffer> p_cmd_buffer,
+                                          Vector<Ref<UniformSet>> p_uniforms,
+                                          Ref<ShaderProgram> p_program, uint32_t p_first_set_index,
+                                          uint32_t p_set_count);
+
+    // drawing
+    void command_render_draw(Ref<CommandBuffer> p_cmd_buffer, uint32_t p_vertex_count,
+                             uint32_t p_instance_count, uint32_t p_base_vertex,
+                             uint32_t p_first_instance);
+    void command_render_draw_indexed(Ref<CommandBuffer> p_cmd_buffer, uint32_t p_index_count,
+                                     uint32_t p_instance_count, uint32_t p_first_vertex,
+                                     int32_t p_vertex_offset, uint32_t p_first_instance);
+
+    // buffer binding
+    void command_render_bind_vertex_buffers(Ref<CommandBuffer> p_cmd_buffer,
+                                            uint32_t p_binding_count, Ref<Buffer> p_buffer,
+                                            uint64_t p_offset);
+    void command_render_bind_index_buffer(Ref<CommandBuffer> p_cmd_buffer, Ref<Buffer> p_buffer,
+                                          VkIndexType p_index_type, uint64_t p_offset);
+
+    // dynamic state
+    void command_render_set_blend_constants(Ref<CommandBuffer> p_cmd_buffer,
+                                            float *p_blend_constants);
+    void command_render_set_line_width(Ref<CommandBuffer> p_cmd_buffer, float p_width);
+
+    /* compute pipeline */
+    Ref<ComputePipeline> compute_pipeline_create(const char *p_program_name);
+
+    void command_bind_compute_pipeline(Ref<CommandBuffer> p_cmd_buffer,
+                                       Ref<ComputePipeline> p_pipeline);
+    void command_bind_compute_uniform_sets(Ref<CommandBuffer> p_cmd_buffer,
+                                           Vector<UniformSet> p_uniform_sets);
+    void command_compute_dispatch(Ref<CommandBuffer> p_cmd_buffer, uint32_t p_x_groups,
+                                  uint32_t p_y_groups, uint32_t p_z_groups);
 
 public:
     RenderingDeviceDriver(RenderingDriverContext *p_context_driver);

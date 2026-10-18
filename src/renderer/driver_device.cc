@@ -1869,6 +1869,104 @@ Ref<UniformSet> RDD::uniform_set_create(Vector<BoundUniform> p_uniforms,
 
 void RDD::uniform_set_free(Ref<UniformSet> p_uniform_set) {}
 
+void RDD::command_bind_render_pipeline(Ref<CommandBuffer> p_cmd_buffer,
+                                       Ref<RenderPipeline> p_render_pipeline) {
+    vkCmdBindPipeline(p_cmd_buffer->vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      p_render_pipeline->vk_pipeline);
+}
+
+void RDD::command_bind_render_uniform_sets(Ref<CommandBuffer> p_cmd_buffer,
+                                           Vector<Ref<UniformSet>> p_uniforms,
+                                           Ref<ShaderProgram> p_shader, uint32_t p_first_set_index,
+                                           uint32_t p_set_count) {
+    Vector<VkDescriptorSet> sets;
+    sets.clear();
+    sets.resize(p_set_count);
+
+    for (uint32_t i = 0; i < p_set_count; ++i) {
+        sets[i] = p_uniforms[i]->vk_descriptor_set;
+    }
+
+    vkCmdBindDescriptorSets(p_cmd_buffer->vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            p_shader->vk_pipeline_layout, p_first_set_index, p_set_count, &sets[0],
+                            0, nullptr);
+}
+
+// drawing
+void RDD::command_render_draw(Ref<CommandBuffer> p_cmd_buffer, uint32_t p_vertex_count,
+                              uint32_t p_instance_count, uint32_t p_base_vertex,
+                              uint32_t p_first_instance) {
+    vkCmdDraw(p_cmd_buffer->vk_command_buffer, p_vertex_count, p_instance_count, p_base_vertex,
+              p_first_instance);
+}
+
+void RDD::command_render_draw_indexed(Ref<CommandBuffer> p_cmd_buffer, uint32_t p_index_count,
+                                      uint32_t p_instance_count, uint32_t p_first_vertex,
+                                      int32_t p_vertex_offset, uint32_t p_first_instance) {
+    vkCmdDrawIndexed(p_cmd_buffer->vk_command_buffer, p_index_count, p_instance_count,
+                     p_first_vertex, p_vertex_offset, p_first_instance);
+}
+
+// buffer binding
+void RDD::command_render_bind_vertex_buffers(Ref<CommandBuffer> p_cmd_buffer,
+                                             uint32_t p_binding_count, Ref<Buffer> p_buffer,
+                                             uint64_t p_offset) {
+    vkCmdBindVertexBuffers(p_cmd_buffer->vk_command_buffer, 0, p_binding_count,
+                           &p_buffer->vk_buffer, &p_offset);
+}
+
+void RDD::command_render_bind_index_buffer(Ref<CommandBuffer> p_cmd_buffer, Ref<Buffer> p_buffer,
+                                           VkIndexType p_index_type, uint64_t p_offset) {
+    vkCmdBindIndexBuffer(p_cmd_buffer->vk_command_buffer, p_buffer->vk_buffer, p_offset,
+                         p_index_type);
+}
+
+// dynamic state
+void RDD::command_render_set_blend_constants(Ref<CommandBuffer> p_cmd_buffer,
+                                             float *p_blend_constants) {
+    vkCmdSetBlendConstants(p_cmd_buffer->vk_command_buffer, p_blend_constants);
+}
+
+void RDD::command_render_set_line_width(Ref<CommandBuffer> p_cmd_buffer, float p_width) {
+    vkCmdSetLineWidth(p_cmd_buffer->vk_command_buffer, p_width);
+}
+
+/* compute */
+Ref<ComputePipeline> RDD::compute_pipeline_create(const char *p_program_name) {
+    Ref<ComputePipeline> pipeline = new ComputePipeline();
+
+    ShaderProgram p_program = ShaderProgram();
+    p_program.load_shader_program(p_program_name, vk_device);
+    ERR_FAIL_COND_V_MSG(
+        !p_program.has_compute_shader || p_program.pipeline_type != PIPELINE_TYPE_COMPUTE, nullptr,
+        "Failed to create shader program for compute pipeline");
+
+    VkComputePipelineCreateInfo pipeline_create_info = {};
+    pipeline_create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipeline_create_info.stage = p_program.vk_pipeline_stages[0];
+    pipeline_create_info.layout = p_program.vk_pipeline_layout;
+
+    VkResult err = vkCreateComputePipelines(vk_device, VK_NULL_HANDLE, 1, &pipeline_create_info,
+                                            nullptr, &pipeline->vk_pipeline);
+    ERR_FAIL_COND_V_MSG(err, nullptr, "Couldn't create Vulkan compute pipelines");
+
+    return pipeline;
+}
+
+void RDD::command_bind_compute_pipeline(Ref<CommandBuffer> p_cmd_buffer,
+                                        Ref<ComputePipeline> p_pipeline) {
+    vkCmdBindPipeline(p_cmd_buffer->vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      p_pipeline->vk_pipeline);
+}
+
+void RDD::command_bind_compute_uniform_sets(Ref<CommandBuffer> p_cmd_buffer,
+                                            Vector<UniformSet> p_uniform_sets) {}
+
+void RDD::command_compute_dispatch(Ref<CommandBuffer> p_cmd_buffer, uint32_t p_x_groups,
+                                   uint32_t p_y_groups, uint32_t p_z_groups) {
+    vkCmdDispatch(p_cmd_buffer->vk_command_buffer, p_x_groups, p_y_groups, p_z_groups);
+}
+
 RDD::RenderingDeviceDriver(RenderingDriverContext *p_context_driver)
     : context_driver(p_context_driver) {}
 

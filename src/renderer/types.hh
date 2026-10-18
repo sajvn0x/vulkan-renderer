@@ -443,3 +443,7 @@ struct BoundUniform {
                type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
     }
 };
+
+struct ComputePipeline : RefTarget<ComputePipeline> {
+    VkPipeline vk_pipeline = VK_NULL_HANDLE;
+};
