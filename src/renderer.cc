@@ -34,9 +34,6 @@ Error Renderer::initialize(GLFWwindow* window) {
     ERR_FAIL_COND_V_MSG(primary_command_pool == nullptr, ERR_CANT_CREATE,
                         "Failed to create primary command pool");
 
-    // command queue
-    command_queue = driver_device->command_queue_create(0);
-
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
         Ref<Fence> fence = driver_device->fence_create();
         ERR_FAIL_COND_V_MSG(fence == nullptr, ERR_CANT_CREATE, "Couldn't able to create fence");
@@ -49,19 +46,35 @@ Error Renderer::initialize(GLFWwindow* window) {
         cmd_buffers[i] = driver_device->command_buffer_create(primary_command_pool);
     }
 
+    // command queue
+    command_queue = driver_device->command_queue_create(0, swapchain_image_count);
+
     return OK;
 }
 
 void Renderer::begin_frame() {
     driver_device->fence_wait(in_flight_fences[current_frame]);
-    driver_device->swapchain_acquire_next_image(
-        swapchain, command_queue->image_available_semaphores[current_frame],
-        in_flight_fences[current_frame]);
+    driver_device->swapchain_acquire_next_image(swapchain,
+                                                command_queue->acquire_semaphores[current_frame],
+                                                in_flight_fences[current_frame]);
 
     uint32_t image_index = swapchain->image_index;
 
     Ref<CommandBuffer> cmd_buffer = cmd_buffers[image_index];
     driver_device->command_buffer_begin(cmd_buffer);
+
+    Vector<VkClearValue> clear_values;
+    clear_values.push_back(VkClearValue{.color = {{0.2f, 0.3f, 0.8f, 1.0f}}});
+    VkRect2D render_area = {
+        .offset = {.x = 0, .y = 0},
+        .extent = {.width = 1920, .height = 1011},
+    };
+    driver_device->command_begin_render_pass(
+        cmd_buffer, swapchain->vk_render_pass, swapchain->framebuffers[image_index],
+        VK_COMMAND_BUFFER_LEVEL_PRIMARY, render_area, clear_values);
+
+    driver_device->command_end_render_pass(cmd_buffer);
+
     driver_device->command_buffer_end(cmd_buffer);
 
     driver_device->command_queue_execute_and_present(command_queue, in_flight_fences[current_frame],

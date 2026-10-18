@@ -20,6 +20,8 @@ class Renderer {
     Vector<Ref<CommandBuffer>> cmd_buffers;
     uint32_t current_frame = 0;
 
+    Vector<Ref<Fence>> fences;
+
 private:
     uint32_t _choose_physical_device();
 

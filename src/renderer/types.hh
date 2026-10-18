@@ -312,8 +312,8 @@ struct Swapchain : RefTarget<Swapchain> {
 };
 
 struct CommandQueue : RefTarget<CommandQueue> {
-    Vector<Ref<Semaphore>> image_available_semaphores;
-    Vector<Ref<Semaphore>> render_finished_semaphores;
+    Vector<Ref<Semaphore>> acquire_semaphores;
+    Vector<Ref<Semaphore>> submit_semaphores;
     uint32_t queue_family = 0;
     uint32_t queue_index = 0;
 };
@@ -423,4 +423,23 @@ struct PipelineColorBlendState {
 
     Vector<Attachment> attachments;
     Color blend_constant;
+};
+
+/* uniform sets */
+struct UniformSet : RefTarget<UniformSet> {
+    VkDescriptorSet vk_descriptor_set = VK_NULL_HANDLE;
+    // VkDescriptorPool vk_descriptor_pool = VK_NULL_HANDLE;
+    Vector<Ref<Buffer>> dynamic_buffers;
+};
+
+struct BoundUniform {
+    VkDescriptorType type = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+    uint32_t binding = 0xffffffff;
+    bool immutable_sampler = false;
+    Vector<Ref<Buffer>> buffers;
+
+    _FORCE_INLINE_ bool is_dynamic() const {
+        return type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC ||
+               type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    }
 };

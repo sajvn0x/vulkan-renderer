@@ -6,6 +6,7 @@
 #include "core/error/error_list.hh"
 #include "display.hh"
 #include "driver_context.hh"
+#include "renderer/shader_container.hh"
 #include "types.hh"
 
 #define MAX_FRAMES_IN_FLIGHT 2
@@ -24,7 +25,15 @@ class RenderingDeviceDriver {
     VkPhysicalDevice physical_device = VK_NULL_HANDLE;
     VkPhysicalDeviceProperties physical_device_properties = {};
     VkPhysicalDeviceFeatures physical_device_features = {};
+    VkPhysicalDeviceFeatures2 physical_device_features2 = {};
+    VkPhysicalDeviceVulkan11Features physical_device_features11 = {};
+    VkPhysicalDeviceVulkan12Features physical_device_features12 = {};
+    VkPhysicalDeviceVulkan13Features physical_device_features13 = {};
+    VkPhysicalDeviceVulkan14Features physical_device_features14 = {};
     VkPhysicalDeviceFeatures requested_device_features = {};
+    VkPhysicalDeviceFeatures2 requested_device_features2 = {};
+    VkPhysicalDeviceVulkan13Features requested_device_features13 = {};
+
     HashMap<String, bool> requested_device_extensions;
     HashSet<String> enabled_device_extension_names;
     Vector<Vector<Queue>> queue_families;
@@ -44,7 +53,6 @@ class RenderingDeviceDriver {
     AccelerationStructureCapabilities acceleration_structure_capabilities;
     bool ray_query_support = false;
     RaytracingCapabilities raytracing_capabilities;
-    bool pipeline_cache_control_support = false;
     bool device_fault_support = false;
     bool framebuffer_depth_resolve = false;
 
@@ -109,8 +117,7 @@ public:
                                        Vector<SubpassDependency> &p_subpass_dependencies);
     void render_pass_free(Ref<RenderPass> p_render_pass);
 
-    // commands
-    void command_begin_render_pass(Ref<CommandBuffer> p_cmd_buffer, Ref<RenderPass> p_render_pass,
+    void command_begin_render_pass(Ref<CommandBuffer> p_cmd_buffer, VkRenderPass p_render_pass,
                                    Ref<Framebuffer> p_framebuffer, VkCommandBufferLevel p_cmd_level,
                                    const VkRect2D &p_rect, Vector<VkClearValue> p_clear_values);
     void command_end_render_pass(Ref<CommandBuffer> p_cmd_buffer);
@@ -153,65 +160,28 @@ private:
     uint32_t command_queue_family_get();
 
 public:
-    Ref<CommandQueue> command_queue_create(int p_cmd_queue_family);
+    Ref<CommandQueue> command_queue_create(int p_cmd_queue_family, uint32_t p_image_count);
     Error command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, Ref<Fence> p_fence,
                                             Ref<Swapchain> p_swapchain,
                                             Ref<CommandBuffer> p_cmd_buffer,
                                             uint32_t p_frame_index);
     void command_queue_free(Ref<CommandQueue> p_cmd_queue);
 
-    //  /* queues */
-    // private:
-    //  struct CommandQueue : RefTarget<CommandQueue> {
-    //      Vector<VkSemaphore> image_semaphores;
-    //      Vector<Swapchain> image_semaphores_swapchains;
-    //      Vector<uint32_t> pending_semaphores_for_execute;
-    //      Vector<uint32_t> pending_semaphores_for_fences;
-    //      Vector<uint32_t> free_image_semaphores;
-    //      Vector<std::pair<Ref<Fence>, uint32_t>> imageimage_semaphores_for_fences;
-    //      uint32_t queue_family = 0;
-    //      uint32_t queue_index = 0;
-    //  };
-    //
-    // public:
-    //  Ref<CommandQueue> command_queue_create(uint32_t p_cmd_queue_family,
-    //                                         bool p_identify_as_main_queue = false);
-    //  Error command_queue_execute_and_present(Ref<CommandQueue>,
-    //                                          Vector<Ref<Semaphore>> p_wait_semaphores,
-    //                                          Vector<Ref<CommandBuffer>> p_cmd_buffers,
-    //                                          Vector<Ref<Semaphore>> p_cmd_semaphores);
-    //  void command_queue_free(Ref<CommandQueue> p_cmd_queue);
-    //
-    // private:
-    //  /* uniform sets */
-    //  using DescriptorSetPools = HashMap<uint32_t, HashMap<VkDescriptorPool, uint32_t>>;
-    //  DescriptorSetPools descriptor_set_pools;
-    //  uint32_t max_descriptor_sets_per_pool = 0;
-    //
-    //  VkDescriptorPool _descriptor_set_pool_create(const uint32_t &p_key);
-    //  void _descriptor_set_pool_unreference(VkDescriptorPool p_vk_descriptor_pool);
-    //
-    // public:
-    //  struct BoundUniform {
-    //      VkDescriptorType type = VK_DESCRIPTOR_TYPE_MAX_ENUM;
-    //      uint32_t binding = 0xffffffff;
-    //      bool immutable_sampler = false;
-    //      Vector<uint32_t> ids;
-    //
-    //      _FORCE_INLINE_ bool is_dynamic() const {
-    //          return type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC ||
-    //                 type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    //      }
-    //  };
-    //
-    //  struct UniformSet : Ref<UniformSet> {
-    //      VkDescriptorSet vk_descriptor_set = VK_NULL_HANDLE;
-    //      VkDescriptorPool vk_descriptor_pool = VK_NULL_HANDLE;
-    //      Vector<Ref<Buffer>> dynamic_buffers;
-    //  };
-    //
-    //  Ref<UniformSet> uniform_set_create(Vector<BoundUniform> p_uniforms);
-    //  void uniform_set_free(Ref<UniformSet> p_uniform_set);
+    /* uniform sets */
+private:
+    static const uint32_t MAX_UNIFORM_POOL_ELEMENT = 65535;
+
+    using DescriptorSetPools = HashMap<uint32_t, VkDescriptorPool>;
+    DescriptorSetPools descriptor_set_pools;
+    uint32_t max_descriptor_sets_per_pool = 100;
+
+    VkDescriptorPool _descriptor_set_pool_create(const VkDescriptorType &p_key);
+    void _descriptor_set_pool_unreference(VkDescriptorPool p_vk_descriptor_pool);
+
+public:
+    Ref<UniformSet> uniform_set_create(Vector<BoundUniform> p_uniforms, Ref<ShaderProgram> p_shader,
+                                       uint32_t p_set_index);
+    void uniform_set_free(Ref<UniformSet> p_uniform_set);
 
     /* commands */
     // command pool
@@ -228,15 +198,15 @@ public:
     void command_buffer_execute_secondary(Ref<CommandBuffer> p_cmd_buffer,
                                           Vector<Ref<CommandBuffer>> p_secondary_cmd_buffers);
 
+    /* render pipeline */
 public:
-    /* pipeline */
     Ref<RenderPipeline> render_pipeline_create(
         String program_name, VkPrimitiveTopology p_render_primitive,
         PipelineRasterizationState p_rasterization_state,
         PipelineMultisampleState p_multisample_state,
         PipelineDepthStencilState p_depth_stencil_state, PipelineColorBlendState p_blend_state,
         Vector<int32_t> p_color_attachments, Vector<VkDynamicState> p_dynamic_state,
-        Ref<RenderPass> p_render_pass, uint32_t p_render_subpass);
+        VkRenderPass p_render_pass, uint32_t p_render_subpass);
 
 public:
     RenderingDeviceDriver(RenderingDriverContext *p_context_driver);

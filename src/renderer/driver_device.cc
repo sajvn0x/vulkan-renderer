@@ -123,6 +123,16 @@ Error RDD::_initialize_device_extensions() {
 Error RDD::_check_device_features() {
     vkGetPhysicalDeviceFeatures(physical_device, &physical_device_features);
 
+    physical_device_features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+
+    physical_device_features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+    physical_device_features11.pNext = &physical_device_features13;
+
+    physical_device_features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    physical_device_features2.pNext = &physical_device_features11;
+
+    vkGetPhysicalDeviceFeatures2(physical_device, &physical_device_features2);
+
     // check for required features
     if (!physical_device_features.imageCubeArray || !physical_device_features.independentBlend) {
         return ERR_CANT_CREATE;
@@ -171,6 +181,8 @@ Error RDD::_check_device_features() {
     VK_DEVICEFEATURE_ENABLE_IF(shaderFloat64);
     VK_DEVICEFEATURE_ENABLE_IF(shaderClipDistance);
     VK_DEVICEFEATURE_ENABLE_IF(shaderCullDistance);
+    if (physical_device_features13.dynamicRendering)
+        requested_device_features13.dynamicRendering = VK_TRUE;
 
     return OK;
 }
@@ -217,14 +229,6 @@ Error RDD::_check_device_capabilities() {
         next_features = &fdmo_features_qcom;
     }
 
-    VkPhysicalDevicePipelineCreationCacheControlFeatures pipeline_cache_control_features = {};
-    if (HAS_EXTENSION(VK_EXT_PIPELINE_CREATION_CACHE_CONTROL_EXTENSION_NAME)) {
-        pipeline_cache_control_features.sType =
-            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES;
-        pipeline_cache_control_features.pNext = next_features;
-        next_features = &pipeline_cache_control_features;
-    }
-
     VkPhysicalDeviceFeatures2 device_features_2 = {};
     device_features_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     device_features_2.pNext = next_features;
@@ -265,10 +269,6 @@ Error RDD::_check_device_capabilities() {
     }
     if (HAS_EXTENSION(VK_QCOM_FRAGMENT_DENSITY_MAP_OFFSET_EXTENSION_NAME)) {
         fdm_capabilities.offset_supported = fdmo_features_qcom.fragmentDensityMapOffset;
-    }
-    if (HAS_EXTENSION(VK_EXT_PIPELINE_CREATION_CACHE_CONTROL_EXTENSION_NAME)) {
-        pipeline_cache_control_support =
-            pipeline_cache_control_features.pipelineCreationCacheControl;
     }
     if (HAS_EXTENSION(VK_EXT_DEVICE_FAULT_EXTENSION_NAME)) {
         device_fault_support = true;
@@ -444,16 +444,6 @@ Error RDD::_initialize_device(const Vector<VkDeviceQueueCreateInfo> &p_queue_cre
         create_info_next = &fdm_offset_features;
     }
 
-    VkPhysicalDevicePipelineCreationCacheControlFeatures pipeline_cache_control_features = {};
-    if (pipeline_cache_control_support) {
-        pipeline_cache_control_features.sType =
-            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES;
-        pipeline_cache_control_features.pNext = create_info_next;
-        pipeline_cache_control_features.pipelineCreationCacheControl =
-            pipeline_cache_control_support;
-        create_info_next = &pipeline_cache_control_features;
-    }
-
     VkPhysicalDeviceFaultFeaturesEXT device_fault_features = {};
     if (device_fault_support) {
         device_fault_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT;
@@ -462,6 +452,10 @@ Error RDD::_initialize_device(const Vector<VkDeviceQueueCreateInfo> &p_queue_cre
         device_fault_features.deviceFaultVendorBinary = VK_TRUE;
         create_info_next = &device_fault_features;
     }
+
+    requested_device_features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    requested_device_features13.pNext = create_info_next;
+    create_info_next = &requested_device_features13;
 
     VkDeviceCreateInfo create_info = {};
     create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -910,14 +904,14 @@ void RDD::render_pass_free(Ref<RenderPass> p_render_pass) {
     vkDestroyRenderPass(vk_device, p_render_pass->vk_render_pass, nullptr);
 }
 
-void RDD::command_begin_render_pass(Ref<CommandBuffer> p_cmd_buffer, Ref<RenderPass> p_render_pass,
+void RDD::command_begin_render_pass(Ref<CommandBuffer> p_cmd_buffer, VkRenderPass p_render_pass,
                                     Ref<Framebuffer> p_framebuffer,
                                     VkCommandBufferLevel p_cmd_level, const VkRect2D &p_rect,
                                     Vector<VkClearValue> p_clear_values) {
     VkRenderPassBeginInfo render_pass_begin = {};
     render_pass_begin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     render_pass_begin.pNext = nullptr;
-    render_pass_begin.renderPass = p_render_pass->vk_render_pass;
+    render_pass_begin.renderPass = p_render_pass;
     render_pass_begin.framebuffer = p_framebuffer->vk_framebuffer;
     render_pass_begin.renderArea = p_rect;
     render_pass_begin.clearValueCount = p_clear_values.size();
@@ -1015,20 +1009,21 @@ void RDD::framebuffer_free(Ref<Framebuffer> p_framebuffer) {
 
 uint32_t RDD::command_queue_family_get() { return 0; }
 
-Ref<CommandQueue> RDD::command_queue_create(int p_cmd_queue_family) {
+Ref<CommandQueue> RDD::command_queue_create(int p_cmd_queue_family, uint32_t p_image_count) {
     Ref<CommandQueue> cmd_queue = new CommandQueue();
 
     cmd_queue->queue_family = p_cmd_queue_family;
-    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-        Ref<Semaphore> image_available_semaphore = semaphore_create();
-        ERR_FAIL_COND_V_MSG(image_available_semaphore == nullptr, nullptr,
-                            "Failed to create semaphore");
-        cmd_queue->image_available_semaphores.push_back(image_available_semaphore);
 
-        Ref<Semaphore> render_finished_semaphore = semaphore_create();
-        ERR_FAIL_COND_V_MSG(render_finished_semaphore == nullptr, nullptr,
-                            "Failed to create semaphore");
-        cmd_queue->render_finished_semaphores.push_back(render_finished_semaphore);
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        Ref<Semaphore> acquire_semaphore = semaphore_create();
+        ERR_FAIL_COND_V_MSG(acquire_semaphore == nullptr, nullptr, "Failed to create semaphore");
+        cmd_queue->acquire_semaphores.push_back(acquire_semaphore);
+    }
+
+    for (uint32_t i = 0; i < p_image_count; ++i) {
+        Ref<Semaphore> submit_semaphore = semaphore_create();
+        ERR_FAIL_COND_V_MSG(submit_semaphore == nullptr, nullptr, "Failed to create semaphore");
+        cmd_queue->submit_semaphores.push_back(submit_semaphore);
     }
 
     return cmd_queue;
@@ -1041,22 +1036,21 @@ Error RDD::command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, Ref<
     // TODO: choose the value queue
     VkQueue queue = queue_families[p_cmd_queue->queue_family][p_cmd_queue->queue_index].queue;
     VkFence fence = p_fence->vk_fence;
-    VkSemaphore image_available_semaphore =
-        p_cmd_queue->image_available_semaphores[p_frame_index]->vk_semaphore;
-    VkSemaphore render_finished_semaphore =
-        p_cmd_queue->render_finished_semaphores[p_frame_index]->vk_semaphore;
+    VkSemaphore acquire_semaphore = p_cmd_queue->acquire_semaphores[p_frame_index]->vk_semaphore;
+    VkSemaphore submit_semaphore =
+        p_cmd_queue->submit_semaphores[p_swapchain->image_index]->vk_semaphore;
 
     VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
     VkSubmitInfo submit_info = {};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit_info.waitSemaphoreCount = 1;
-    submit_info.pWaitSemaphores = &image_available_semaphore;
+    submit_info.pWaitSemaphores = &acquire_semaphore;
     submit_info.pWaitDstStageMask = wait_stages;
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &p_cmd_buffer->vk_command_buffer;
     submit_info.signalSemaphoreCount = 1;
-    submit_info.pSignalSemaphores = &render_finished_semaphore;
+    submit_info.pSignalSemaphores = &submit_semaphore;
 
     VkResult result = vkQueueSubmit(queue, 1, &submit_info, fence);
     ERR_FAIL_COND_V(result, FAILED);
@@ -1064,7 +1058,7 @@ Error RDD::command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, Ref<
     VkPresentInfoKHR present_info = {};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = &render_finished_semaphore;
+    present_info.pWaitSemaphores = &submit_semaphore;
     present_info.swapchainCount = 1;
     present_info.pSwapchains = &p_swapchain->vk_swapchain;
     present_info.pImageIndices = &p_swapchain->image_index;
@@ -1173,14 +1167,14 @@ Ref<RenderPipeline> RDD::render_pipeline_create(
     PipelineRasterizationState p_rasterization_state, PipelineMultisampleState p_multisample_state,
     PipelineDepthStencilState p_depth_stencil_state, PipelineColorBlendState p_blend_state,
     Vector<int32_t> p_color_attachments, Vector<VkDynamicState> p_dynamic_state,
-    Ref<RenderPass> p_render_pass, uint32_t p_render_subpass) {
+    VkRenderPass p_render_pass, uint32_t p_render_subpass) {
     Ref<RenderPipeline> render_pipeline = new RenderPipeline();
 
     // load the shader program
     Ref<ShaderProgram> shader_program = new ShaderProgram();
     Error err = shader_program->load_shader_program(program_name, vk_device);
     ERR_FAIL_COND_V(err != OK, nullptr);
-    ERR_FAIL_COND_V(shader_program->pipeline_type == PIPELINE_TYPE_GRAPHICS, nullptr);
+    ERR_FAIL_COND_V(shader_program->pipeline_type != PIPELINE_TYPE_GRAPHICS, nullptr);
 
     // vertex input
     Vector<VkPipelineVertexInputStateCreateInfo> vertex_input_state_create_infos;
@@ -1322,7 +1316,7 @@ Ref<RenderPipeline> RDD::render_pipeline_create(
     VkGraphicsPipelineCreateInfo pipeline_create_info = {};
     pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipeline_create_info.stageCount = 0;  // p_shader->vk_stages_create_info.size();
-    ERR_FAIL_COND_V_MSG(pipeline_create_info.stageCount == 0, nullptr,
+    ERR_FAIL_COND_V_MSG(pipeline_create_info.stageCount != 0, nullptr,
                         "Can't create Vulkan pipeline without shader module");
 
     pipeline_create_info.stageCount = shader_program->vk_pipeline_stages.size();
@@ -1337,7 +1331,7 @@ Ref<RenderPipeline> RDD::render_pipeline_create(
     pipeline_create_info.pColorBlendState = &color_blend_state_create_info;
     pipeline_create_info.pDynamicState = &dynamic_state_create_info;
     pipeline_create_info.layout = shader_program->vk_pipeline_layout;
-    pipeline_create_info.renderPass = p_render_pass->vk_render_pass;
+    pipeline_create_info.renderPass = p_render_pass;
     pipeline_create_info.subpass = p_render_subpass;
 
     VkResult result = vkCreateGraphicsPipelines(vk_device, nullptr, 1, &pipeline_create_info,
@@ -1545,7 +1539,6 @@ Ref<Swapchain> RDD::swapchain_create(Surface &p_surface) {
         Ref<Framebuffer> framebuffer = new Framebuffer();
         framebuffer->vk_framebuffer = vk_framebuffer;
         framebuffer->swap_chain_image = swapchain->images[i];
-        ;
         framebuffer->swap_chain_image_subresource_range = view_create_info.subresourceRange;
         swapchain->framebuffers.push_back(framebuffer);
     }
@@ -1768,6 +1761,113 @@ VkResult RDD::_create_render_pass(VkDevice p_device, const VkRenderPassCreateInf
         return vkCreateRenderPass(vk_device, &create_info, p_allocator, p_render_pass);
     }
 }
+
+/* uniform sets */
+VkDescriptorPool RDD::_descriptor_set_pool_create(const VkDescriptorType &p_type) {
+    for (const auto &[key, value] : descriptor_set_pools) {
+        if (key == p_type) return value;
+    }
+
+    VkDescriptorPoolSize pool_sizes = {};
+    pool_sizes.type = p_type;
+    pool_sizes.descriptorCount = max_descriptor_sets_per_pool;
+
+    VkDescriptorPoolCreateInfo create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    create_info.flags = 0;
+    create_info.maxSets = max_descriptor_sets_per_pool;
+    create_info.poolSizeCount = 1;
+    create_info.pPoolSizes = &pool_sizes;
+
+    VkDescriptorPool vk_descriptor_pool = VK_NULL_HANDLE;
+
+    VkResult res = vkCreateDescriptorPool(vk_device, &create_info, nullptr, &vk_descriptor_pool);
+    ERR_FAIL_COND_V_MSG(res, VK_NULL_HANDLE, "Couldn't create Vulkan descriptor pool");
+
+    descriptor_set_pools.insert(std::pair<uint32_t, VkDescriptorPool>(p_type, vk_descriptor_pool));
+
+    return vk_descriptor_pool;
+}
+
+void RDD::_descriptor_set_pool_unreference(VkDescriptorPool p_vk_descriptor_pool) {}
+
+Ref<UniformSet> RDD::uniform_set_create(Vector<BoundUniform> p_uniforms,
+                                        Ref<ShaderProgram> p_shader, uint32_t p_set_index) {
+    Ref<UniformSet> uniform_set = new UniformSet();
+
+    VkWriteDescriptorSet *vk_writes =
+        (VkWriteDescriptorSet *)alloca(sizeof(VkWriteDescriptorSet) * p_uniforms.size());
+    uint32_t writes_amount = 0;
+    for (uint32_t i = 0; i < p_uniforms.size(); ++i) {
+        const BoundUniform &uniform = p_uniforms[i];
+
+        vk_writes[writes_amount] = {};
+        vk_writes[writes_amount].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+
+        bool add_write = true;
+        uint32_t num_descriptors = 1;
+
+        switch (uniform.type) {
+            case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: {
+                Ref<Buffer> buffer = uniform.buffers[0];
+
+                VkDescriptorBufferInfo *vk_buf_info =
+                    (VkDescriptorBufferInfo *)alloca(sizeof(VkDescriptorImageInfo));
+                *vk_buf_info = {};
+                vk_buf_info->buffer = buffer->vk_buffer;
+                vk_buf_info->range = buffer->size;
+
+                vk_writes[writes_amount].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                vk_writes[writes_amount].pBufferInfo = vk_buf_info;
+            } break;
+
+            case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: {
+                Ref<Buffer> buffer = uniform.buffers[0];
+
+                VkDescriptorBufferInfo *vk_buf_info =
+                    (VkDescriptorBufferInfo *)alloca(sizeof(VkDescriptorImageInfo));
+                *vk_buf_info = {};
+                vk_buf_info->buffer = buffer->vk_buffer;
+                vk_buf_info->range = buffer->size;
+
+                vk_writes[writes_amount].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                vk_writes[writes_amount].pBufferInfo = vk_buf_info;
+
+            } break;
+            default:
+                ERR_FAIL_V_MSG(nullptr,
+                               "Descriptor Set other than VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER and "
+                               "UNIFORM_TYPE_STORAGE_BUFFER not supported");
+        }
+
+        if (add_write) {
+            vk_writes[writes_amount].dstBinding = uniform.binding;
+            vk_writes[writes_amount].descriptorCount = num_descriptors;
+            writes_amount = 0;
+        }
+    }
+
+    VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {};
+    descriptor_set_allocate_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    descriptor_set_allocate_info.descriptorSetCount = 1;
+    descriptor_set_allocate_info.pSetLayouts = &p_shader->descriptor_set_layouts[p_set_index];
+
+    VkDescriptorSet vk_descriptor_set = VK_NULL_HANDLE;
+    VkResult res =
+        vkAllocateDescriptorSets(vk_device, &descriptor_set_allocate_info, &vk_descriptor_set);
+    ERR_FAIL_COND_V_MSG(res, nullptr, "Couldn't allocate Vulkan descriptor sets");
+
+    for (uint32_t i = 0; i < writes_amount; i++) {
+        vk_writes[i].dstSet = vk_descriptor_set;
+    }
+    vkUpdateDescriptorSets(vk_device, writes_amount, vk_writes, 0, nullptr);
+
+    uniform_set->vk_descriptor_set = vk_descriptor_set;
+
+    return nullptr;
+}
+
+void RDD::uniform_set_free(Ref<UniformSet> p_uniform_set) {}
 
 RDD::RenderingDeviceDriver(RenderingDriverContext *p_context_driver)
     : context_driver(p_context_driver) {}
