@@ -4,6 +4,7 @@
 #include "renderer/driver_context.hh"
 #include "renderer/driver_device.hh"
 #include "renderer/types.hh"
+#include "shaders/default.hh"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -21,6 +22,9 @@ class Renderer {
     uint32_t current_frame = 0;
 
     Vector<Ref<Fence>> fences;
+
+    // pipeline
+    DefaultGraphicsPipeline* default_pipeline = nullptr;
 
 private:
     uint32_t _choose_physical_device();

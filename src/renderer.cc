@@ -49,6 +49,9 @@ Error Renderer::initialize(GLFWwindow* window) {
     // command queue
     command_queue = driver_device->command_queue_create(0, swapchain_image_count);
 
+    default_pipeline =
+        new DefaultGraphicsPipeline(driver_device, "default", swapchain->vk_render_pass);
+
     return OK;
 }
 
@@ -64,7 +67,7 @@ void Renderer::begin_frame() {
     driver_device->command_buffer_begin(cmd_buffer);
 
     Vector<VkClearValue> clear_values;
-    clear_values.push_back(VkClearValue{.color = {{0.2f, 0.3f, 0.8f, 1.0f}}});
+    clear_values.push_back(VkClearValue{.color = {{0.0f, 0.0f, 0.0f, 1.0f}}});
     VkRect2D render_area = {
         .offset = {.x = 0, .y = 0},
         .extent = {.width = 1920, .height = 1011},
@@ -72,6 +75,9 @@ void Renderer::begin_frame() {
     driver_device->command_begin_render_pass(
         cmd_buffer, swapchain->vk_render_pass, swapchain->framebuffers[image_index],
         VK_COMMAND_BUFFER_LEVEL_PRIMARY, render_area, clear_values);
+
+    // render a triangle using default pipeline
+    default_pipeline->draw(cmd_buffer);
 
     driver_device->command_end_render_pass(cmd_buffer);
 

@@ -42,6 +42,7 @@ set(SOURCES
 	src/renderer/driver_context.cc
 	src/renderer/driver_device.cc
 	src/renderer/shader_container.cc
+	src/shaders/default.cc
 
 	src/renderer/vma.cc
 )

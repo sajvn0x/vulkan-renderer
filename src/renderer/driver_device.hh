@@ -117,6 +117,9 @@ public:
                                        Vector<SubpassDependency> &p_subpass_dependencies);
     void render_pass_free(Ref<RenderPass> p_render_pass);
 
+    void command_render_begin_rendering(Ref<CommandBuffer> p_cmd_buffer, VkRect2D p_render_area);
+    void command_render_end_rendering(Ref<CommandBuffer> p_cmd_buffer);
+
 public:
     /* swapchain */
     Ref<Swapchain> swapchain_create(Surface &p_surface);
@@ -190,6 +193,7 @@ public:
 public:
     Ref<RenderPipeline> render_pipeline_create(
         String program_name, VkPrimitiveTopology p_render_primitive,
+        VkPipelineVertexInputStateCreateInfo vertex_input,
         PipelineRasterizationState p_rasterization_state,
         PipelineMultisampleState p_multisample_state,
         PipelineDepthStencilState p_depth_stencil_state, PipelineColorBlendState p_blend_state,

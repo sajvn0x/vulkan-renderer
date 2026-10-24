@@ -867,7 +867,7 @@ Ref<RenderPass> RDD::render_pass_create(Vector<Attachment> &p_attachments,
         vk_subpasses[i].pPreserveAttachments = p_subpasses[i].preserve_attachments.data();
     }
 
-    Vector<VkSubpassDependency2> vk_subpass_dependencies(p_attachments.size());
+    Vector<VkSubpassDependency2> vk_subpass_dependencies(p_subpass_dependencies.size());
     for (uint32_t i = 0; i < p_subpass_dependencies.size(); i++) {
         vk_subpass_dependencies[i] = {};
         vk_subpass_dependencies[i].sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2;
@@ -902,6 +902,67 @@ Ref<RenderPass> RDD::render_pass_create(Vector<Attachment> &p_attachments,
 
 void RDD::render_pass_free(Ref<RenderPass> p_render_pass) {
     vkDestroyRenderPass(vk_device, p_render_pass->vk_render_pass, nullptr);
+}
+
+void RDD::command_render_begin_rendering(Ref<CommandBuffer> p_cmd_buffer, VkRect2D p_render_area) {
+    VkRenderingAttachmentInfo color_attachment_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .pNext = nullptr,
+        .imageView = nullptr,
+        .imageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .resolveMode = VK_RESOLVE_MODE_NONE,
+        .resolveImageView = nullptr,
+        .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_NONE,
+        .clearValue = (VkClearValue){},
+    };
+
+    VkImageView color_image_view = VK_NULL_HANDLE;
+    VkImageViewCreateInfo color_image_view_ci = {};
+    color_image_view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+
+    vkCreateImageView(vk_device, &color_image_view_ci, nullptr, &color_image_view);
+
+    VkRenderingAttachmentInfo depth_attachment_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .pNext = nullptr,
+        .imageView = nullptr,
+        .imageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .resolveMode = VK_RESOLVE_MODE_NONE,
+        .resolveImageView = nullptr,
+        .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_NONE,
+        .clearValue = (VkClearValue){},
+    };
+    VkRenderingAttachmentInfo stencil_attachment_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .pNext = nullptr,
+        .imageView = nullptr,
+        .imageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .resolveMode = VK_RESOLVE_MODE_NONE,
+        .resolveImageView = nullptr,
+        .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_NONE,
+        .clearValue = (VkClearValue){},
+    };
+
+    VkRenderingInfo rendering_info = {};
+    rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    rendering_info.flags = 0;
+    rendering_info.renderArea = p_render_area, rendering_info.layerCount = 1,
+    rendering_info.viewMask = 0, rendering_info.colorAttachmentCount = 1,
+    rendering_info.pColorAttachments = &color_attachment_info,
+    rendering_info.pDepthAttachment = &depth_attachment_info,
+    rendering_info.pStencilAttachment = &stencil_attachment_info,
+
+    vkCmdBeginRendering(p_cmd_buffer->vk_command_buffer, &rendering_info);
+}
+
+void RDD::command_render_end_rendering(Ref<CommandBuffer> p_cmd_buffer) {
+    vkCmdEndRendering(p_cmd_buffer->vk_command_buffer);
 }
 
 void RDD::command_begin_render_pass(Ref<CommandBuffer> p_cmd_buffer, VkRenderPass p_render_pass,
@@ -1164,6 +1225,7 @@ void RDD::command_buffer_execute_secondary(Ref<CommandBuffer> p_cmd_buffer,
 
 Ref<RenderPipeline> RDD::render_pipeline_create(
     String program_name, VkPrimitiveTopology p_render_primitive,
+    VkPipelineVertexInputStateCreateInfo vertex_input,
     PipelineRasterizationState p_rasterization_state, PipelineMultisampleState p_multisample_state,
     PipelineDepthStencilState p_depth_stencil_state, PipelineColorBlendState p_blend_state,
     Vector<int32_t> p_color_attachments, Vector<VkDynamicState> p_dynamic_state,
@@ -1269,7 +1331,7 @@ Ref<RenderPipeline> RDD::render_pipeline_create(
     Vector<VkPipelineColorBlendAttachmentState> vk_attachment_states(p_color_attachments.size());
     for (uint32_t i = 0; i < p_color_attachments.size(); i++) {
         vk_attachment_states[i] = {};
-        if (p_color_attachments[i] == VK_ATTACHMENT_UNUSED) {
+        if (p_color_attachments[i] != VK_ATTACHMENT_UNUSED) {
             vk_attachment_states[i].blendEnable = p_blend_state.attachments[i].enable_blend;
 
             vk_attachment_states[i].srcColorBlendFactor =
@@ -1321,7 +1383,7 @@ Ref<RenderPipeline> RDD::render_pipeline_create(
 
     pipeline_create_info.stageCount = shader_program->vk_pipeline_stages.size();
     pipeline_create_info.pStages = shader_program->vk_pipeline_stages.data();
-    pipeline_create_info.pVertexInputState = &shader_program->vk_vertex_info.vk_state;
+    pipeline_create_info.pVertexInputState = &vertex_input;
     pipeline_create_info.pInputAssemblyState = &input_assembly_create_info;
     pipeline_create_info.pTessellationState = &tessellation_create_info;
     pipeline_create_info.pViewportState = &viewport_state_create_info;
