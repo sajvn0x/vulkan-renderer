@@ -90,7 +90,7 @@ void DefaultGraphicsPipeline::draw(Ref<CommandBuffer> p_cmd_buffer) {
     Vector<VkRect2D> scissors;
     scissors.clear();
     scissors.resize(1);
-    scissors[0].extent = {.width = 1920, .height = 1900};
+    scissors[0].extent = {.width = 1920, .height = 1080};
     scissors[0].offset = {.x = 0, .y = 0};
 
     device_driver->command_render_set_viewport(p_cmd_buffer, viewports);

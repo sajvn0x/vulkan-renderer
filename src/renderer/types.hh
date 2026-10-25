@@ -9,6 +9,7 @@
 #include "core/math/types.hh"
 #include "core/traits.hh"
 #include "core/typedefs.hh"
+#include "shader_container.hh"
 #include "vma.hh"
 
 struct Framebuffer;
@@ -332,6 +333,7 @@ struct Shader : RefTarget<Shader> {
 /* pipeline */
 struct RenderPipeline : RefTarget<RenderPipeline> {
     VkPipeline vk_pipeline = VK_NULL_HANDLE;
+    Ref<ShaderProgram> shader_program = nullptr;
 };
 
 struct PipelineRasterizationState {

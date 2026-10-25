@@ -52,6 +52,8 @@ Error Renderer::initialize(GLFWwindow* window) {
     default_pipeline =
         new DefaultGraphicsPipeline(driver_device, "default", swapchain->vk_render_pass);
 
+    squares_bg_pipeline = new SquaresBGPipeline(driver_device, swapchain->vk_render_pass);
+
     return OK;
 }
 
@@ -76,7 +78,11 @@ void Renderer::begin_frame() {
         cmd_buffer, swapchain->vk_render_pass, swapchain->framebuffers[image_index],
         VK_COMMAND_BUFFER_LEVEL_PRIMARY, render_area, clear_values);
 
-    // render a triangle using default pipeline
+    SquaresBGPipeline::SceneData scene_data = {.resolution = {1280.0f, 720.0f},
+                                               .time = (float)glfwGetTime()};
+
+    squares_bg_pipeline->update_scene_data(scene_data);
+    squares_bg_pipeline->draw(cmd_buffer);
     default_pipeline->draw(cmd_buffer);
 
     driver_device->command_end_render_pass(cmd_buffer);

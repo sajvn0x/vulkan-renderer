@@ -1400,6 +1400,8 @@ Ref<RenderPipeline> RDD::render_pipeline_create(
                                                 nullptr, &render_pipeline->vk_pipeline);
     ERR_FAIL_COND_V_MSG(result, nullptr, "Couldn't create Vulkan graphics pipelines");
 
+    render_pipeline->shader_program = shader_program;
+
     return render_pipeline;
 }
 
@@ -1905,7 +1907,7 @@ Ref<UniformSet> RDD::uniform_set_create(Vector<BoundUniform> p_uniforms,
         if (add_write) {
             vk_writes[writes_amount].dstBinding = uniform.binding;
             vk_writes[writes_amount].descriptorCount = num_descriptors;
-            writes_amount = 0;
+            writes_amount++;
         }
     }
 
@@ -1913,6 +1915,8 @@ Ref<UniformSet> RDD::uniform_set_create(Vector<BoundUniform> p_uniforms,
     descriptor_set_allocate_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     descriptor_set_allocate_info.descriptorSetCount = 1;
     descriptor_set_allocate_info.pSetLayouts = &p_shader->descriptor_set_layouts[p_set_index];
+    descriptor_set_allocate_info.descriptorPool =
+        _descriptor_set_pool_create(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
     VkDescriptorSet vk_descriptor_set = VK_NULL_HANDLE;
     VkResult res =
@@ -1926,7 +1930,7 @@ Ref<UniformSet> RDD::uniform_set_create(Vector<BoundUniform> p_uniforms,
 
     uniform_set->vk_descriptor_set = vk_descriptor_set;
 
-    return nullptr;
+    return uniform_set;
 }
 
 void RDD::uniform_set_free(Ref<UniformSet> p_uniform_set) {}

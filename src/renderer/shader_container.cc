@@ -263,7 +263,7 @@ Error ShaderProgram::_build_pipeline_layout(VkDevice vk_device) {
             layout_bindings.push_back(binding);
         }
 
-        VkDescriptorSetLayoutCreateInfo layout_info{};
+        VkDescriptorSetLayoutCreateInfo layout_info = {};
         layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         layout_info.bindingCount = static_cast<uint32_t>(layout_bindings.size());
         layout_info.pBindings = layout_bindings.data();
