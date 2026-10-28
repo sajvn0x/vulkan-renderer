@@ -6,16 +6,19 @@
 #include "renderer.hh"
 
 class Engine {
-private:
-    float delta_time;
+    static Engine* singleton;
 
+public:
+    Engine();
+    ~Engine();
+
+    static Engine* get_singleton() { return singleton; }
+
+    float delta_time;
+    bool is_app_running = true;
     GLFWwindow* window;
     Renderer* renderer = nullptr;
 
-public:
     Error initialize();
     void run();
-
-    Engine();
-    ~Engine();
 };

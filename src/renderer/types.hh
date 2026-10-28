@@ -125,6 +125,16 @@ struct FragmentDensityMapCapabilities {
     bool offset_supported = false;
 };
 
+/* fence */
+struct Fence : RefTarget<Fence> {
+    VkFence vk_fence = VK_NULL_HANDLE;
+};
+
+/* semaphore */
+struct Semaphore : RefTarget<Semaphore> {
+    VkSemaphore vk_semaphore = VK_NULL_HANDLE;
+};
+
 /* buffers */
 struct Buffer : public RefTarget<Buffer> {
     VkBuffer vk_buffer = VK_NULL_HANDLE;
@@ -144,7 +154,7 @@ struct Buffer : public RefTarget<Buffer> {
 
 /* texture */
 struct TextureView {
-    VkFormat format = VK_FORMAT_UNDEFINED;
+    VkImageViewType image_view = VK_IMAGE_VIEW_TYPE_2D;
     VkComponentSwizzle swizzle_r = VK_COMPONENT_SWIZZLE_R;
     VkComponentSwizzle swizzle_g = VK_COMPONENT_SWIZZLE_G;
     VkComponentSwizzle swizzle_b = VK_COMPONENT_SWIZZLE_B;
@@ -228,16 +238,6 @@ struct SamplerState {
     float max_lod = 1e20;
     VkBorderColor border_color = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
     bool unnormalized_uvw = false;
-};
-
-/* fence */
-struct Fence : RefTarget<Fence> {
-    VkFence vk_fence = VK_NULL_HANDLE;
-};
-
-/* semaphore */
-struct Semaphore : RefTarget<Semaphore> {
-    VkSemaphore vk_semaphore = VK_NULL_HANDLE;
 };
 
 /* commands */

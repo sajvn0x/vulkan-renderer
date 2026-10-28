@@ -1,7 +1,5 @@
 #pragma once
 
-#include <mutex>
-
 #include "core/containers.hh"
 #include "core/error/error_list.hh"
 #include "display.hh"
@@ -72,6 +70,22 @@ private:
 public:
     Error initialize(uint32_t p_device_index, uint32_t p_frame_count);
 
+    /* Synchronization */
+public:
+    // fence
+    Ref<Fence> fence_create();
+    Error fence_wait(Ref<Fence> p_fence);
+    void fence_free(Ref<Fence> p_fence);
+
+    // semaphore
+    Ref<Semaphore> semaphore_create();
+    void semaphore_free(Ref<Semaphore> p_semaphore);
+
+    // pipeline barriers
+    struct PipelineBarrier {};
+
+    Ref<PipelineBarrier> pipeline_barrier_create();
+
 private:
     /* Memory */
     VmaAllocator allocator = nullptr;
@@ -137,15 +151,6 @@ public:
                                         Vector<Ref<Texture>> p_attachments, uint32_t p_width,
                                         uint32_t p_height);
     void framebuffer_free(Ref<Framebuffer> p_framebuffer);
-
-    /* fence */
-    Ref<Fence> fence_create();
-    Error fence_wait(Ref<Fence> p_fence);
-    void fence_free(Ref<Fence> p_fence);
-
-    /* semaphore */
-    Ref<Semaphore> semaphore_create();
-    void semaphore_free(Ref<Semaphore> p_semaphore);
 
 private:
     uint32_t command_queue_family_get();
