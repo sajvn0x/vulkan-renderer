@@ -15,45 +15,6 @@
 
 class RenderingDeviceDriver {
 public:
-    struct ID {
-        uint64_t id = 0;
-        _ALWAYS_INLINE_ ID() = default;
-        _ALWAYS_INLINE_ ID(uint64_t p_id) : id(p_id) {}
-    };
-
-#define DEFINE_ID(m_name)                                                         \
-    struct m_name##ID : public ID {                                               \
-        _ALWAYS_INLINE_ explicit operator bool() const { return id != 0; }        \
-        _ALWAYS_INLINE_ m_name##ID &operator=(m_name##ID p_other) {               \
-            id = p_other.id;                                                      \
-            return *this;                                                         \
-        }                                                                         \
-        _ALWAYS_INLINE_ bool operator<(const m_name##ID &p_other) const {         \
-            return id < p_other.id;                                               \
-        }                                                                         \
-        _ALWAYS_INLINE_ bool operator==(const m_name##ID &p_other) const {        \
-            return id == p_other.id;                                              \
-        }                                                                         \
-        _ALWAYS_INLINE_ bool operator!=(const m_name##ID &p_other) const {        \
-            return id != p_other.id;                                              \
-        }                                                                         \
-        _ALWAYS_INLINE_ m_name##ID(const m_name##ID &p_other) : ID(p_other.id) {} \
-        _ALWAYS_INLINE_ explicit m_name##ID(uint64_t p_int) : ID(p_int) {}        \
-        _ALWAYS_INLINE_ explicit m_name##ID(void *p_ptr) : ID((uint64_t)p_ptr) {} \
-        _ALWAYS_INLINE_ m_name##ID() = default;                                   \
-    };
-
-    DEFINE_ID(Buffer);
-    DEFINE_ID(Texture);
-    DEFINE_ID(Sampler);
-    DEFINE_ID(CommandPool);
-    DEFINE_ID(CommandBuffer);
-    DEFINE_ID(UniformSet);
-    DEFINE_ID(Pipeline);
-    DEFINE_ID(RenderPass);
-    DEFINE_ID(Semaphore);
-    DEFINE_ID(Fence);
-
 private:
     struct Queue {
         VkQueue queue = VK_NULL_HANDLE;
@@ -118,13 +79,13 @@ public:
     /* Synchronization */
 public:
     // fence
-    Ref<Fence> fence_create();
-    Error fence_wait(Ref<Fence> p_fence);
-    void fence_free(Ref<Fence> p_fence);
+    FenceID fence_create();
+    Error fence_wait(FenceID p_fence);
+    void fence_free(FenceID p_fence);
 
     // semaphore
-    Ref<Semaphore> semaphore_create();
-    void semaphore_free(Ref<Semaphore> p_semaphore);
+    SemaphoreID semaphore_create();
+    void semaphore_free(SemaphoreID p_semaphore);
 
     // pipeline barrier
     void command_pipeline_barrier(CommandBufferID p_cmd_buffer, VkMemoryBarrier2 &p_memory_barrier,
@@ -183,8 +144,7 @@ public:
     /* swapchain */
     Ref<Swapchain> swapchain_create(Surface &p_surface);
     Error swapchain_resize(Ref<Swapchain> p_old_swapchain = nullptr);
-    void swapchain_acquire_next_image(Ref<Swapchain> p_swapchain, Ref<Semaphore> p_semaphore,
-                                      Ref<Fence> p_fence);
+    void swapchain_acquire_next_image(Ref<Swapchain> p_swapchain, SemaphoreID p_semaphore);
     Ref<Framebuffer> swapchain_acquire_framebuffer();
     bool _determine_swap_chain_format(Surface &p_surface, VkFormat &p_format,
                                       VkColorSpaceKHR &p_color_space);
@@ -202,7 +162,7 @@ private:
 
 public:
     Ref<CommandQueue> command_queue_create(int p_cmd_queue_family, uint32_t p_image_count);
-    Error command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, Ref<Fence> p_fence,
+    Error command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, FenceID p_fence,
                                             Ref<Swapchain> p_swapchain,
                                             Ref<CommandBuffer> p_cmd_buffer,
                                             uint32_t p_frame_index);
@@ -292,10 +252,9 @@ public:
     void command_render_set_line_width(Ref<CommandBuffer> p_cmd_buffer, float p_width);
 
     /* compute pipeline */
-    Ref<ComputePipeline> compute_pipeline_create(const char *p_program_name);
+    PipelineID compute_pipeline_create(const char *p_program_name);
 
-    void command_bind_compute_pipeline(Ref<CommandBuffer> p_cmd_buffer,
-                                       Ref<ComputePipeline> p_pipeline);
+    void command_bind_compute_pipeline(Ref<CommandBuffer> p_cmd_buffer, PipelineID p_pipeline);
     void command_bind_compute_uniform_sets(Ref<CommandBuffer> p_cmd_buffer,
                                            Vector<UniformSet> p_uniform_sets);
     void command_compute_dispatch(Ref<CommandBuffer> p_cmd_buffer, uint32_t p_x_groups,

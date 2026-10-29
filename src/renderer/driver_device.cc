@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "core/error/error_macros.hh"
+#include "core/memory.hh"
 #include "renderer/types.hh"
 #include "shader_container.hh"
 #include "vulkan/vulkan_core.h"
@@ -497,55 +498,64 @@ Error RDD::_initialize_allocator() {
 }
 
 /* fence */
-Ref<Fence> RDD::fence_create() {
-    Ref<Fence> fence = new Fence();
-
+FenceID RDD::fence_create() {
     VkFenceCreateInfo fence_create_info = {};
     fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fence_create_info.pNext = nullptr;
     fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    VkResult result = vkCreateFence(vk_device, &fence_create_info, nullptr, &fence->vk_fence);
+    VkFence vk_fence = VK_NULL_HANDLE;
+    VkResult result = vkCreateFence(vk_device, &fence_create_info, nullptr, &vk_fence);
 
-    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, nullptr, "Couldn't create vulkan fence");
+    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, FenceID(), "Couldn't create vulkan fence");
 
-    return fence;
+    Fence *fence = memnew(Fence);
+    fence->vk_fence = vk_fence;
+
+    return FenceID(fence);
 }
 
-Error RDD::fence_wait(Ref<Fence> p_fence) {
-    VkResult fence_status = vkGetFenceStatus(vk_device, p_fence->vk_fence);
+Error RDD::fence_wait(FenceID p_fence) {
+    Fence *fence = (Fence *)p_fence.id;
+
+    VkResult fence_status = vkGetFenceStatus(vk_device, fence->vk_fence);
     if (fence_status == VK_NOT_READY) {
-        VkResult err = vkWaitForFences(vk_device, 1, &p_fence->vk_fence, VK_TRUE, UINT64_MAX);
+        VkResult err = vkWaitForFences(vk_device, 1, &fence->vk_fence, VK_TRUE, UINT64_MAX);
         ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, FAILED, "Couldn't wait for Vulkan fence");
     }
 
-    VkResult err = vkResetFences(vk_device, 1, &p_fence->vk_fence);
+    VkResult err = vkResetFences(vk_device, 1, &fence->vk_fence);
     ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, FAILED, "Couldn't reset Vulkan fence");
 
     return OK;
 }
 
-void RDD::fence_free(Ref<Fence> p_fence) { vkDestroyFence(vk_device, p_fence->vk_fence, nullptr); }
+void RDD::fence_free(FenceID p_fence) {
+    Fence *fence = (Fence *)p_fence.id;
+    vkDestroyFence(vk_device, fence->vk_fence, nullptr);
+}
 
 /* semaphore */
-Ref<Semaphore> RDD::semaphore_create() {
-    Ref<Semaphore> semaphore = new Semaphore();
-
+SemaphoreID RDD::semaphore_create() {
     VkSemaphoreCreateInfo semaphore_create_info = {};
     semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    VkResult err =
-        vkCreateSemaphore(vk_device, &semaphore_create_info, nullptr, &semaphore->vk_semaphore);
-    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr, "Couldn't create Vulkan semaphore");
 
-    return semaphore;
+    VkSemaphore vk_semaphore = VK_NULL_HANDLE;
+    VkResult err = vkCreateSemaphore(vk_device, &semaphore_create_info, nullptr, &vk_semaphore);
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, SemaphoreID(), "Couldn't create Vulkan semaphore");
+
+    Semaphore *semaphore = memnew(Semaphore);
+    semaphore->vk_semaphore = vk_semaphore;
+
+    return SemaphoreID(semaphore);
 }
 
-void RDD::semaphore_free(Ref<Semaphore> p_semaphore) {
-    vkDestroySemaphore(vk_device, p_semaphore->vk_semaphore, nullptr);
+void RDD::semaphore_free(SemaphoreID p_semaphore) {
+    Semaphore *semaphore = (Semaphore *)p_semaphore.id;
+    vkDestroySemaphore(vk_device, semaphore->vk_semaphore, nullptr);
 }
 
-void RDD::command_pipeline_barrier(RDD::CommandBufferID p_cmd_buffer,
-                                   VkMemoryBarrier2 &p_memory_barrier,
+void RDD::command_pipeline_barrier(CommandBufferID p_cmd_buffer, VkMemoryBarrier2 &p_memory_barrier,
                                    Vector<VkBufferMemoryBarrier2> &p_buffer_barriers,
                                    Vector<VkImageMemoryBarrier2> &p_image_barriers) {
     CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
@@ -1094,30 +1104,35 @@ Ref<CommandQueue> RDD::command_queue_create(int p_cmd_queue_family, uint32_t p_i
     cmd_queue->queue_family = p_cmd_queue_family;
 
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-        Ref<Semaphore> acquire_semaphore = semaphore_create();
-        ERR_FAIL_COND_V_MSG(acquire_semaphore == nullptr, nullptr, "Failed to create semaphore");
+        SemaphoreID acquire_semaphore = semaphore_create();
         cmd_queue->acquire_semaphores.push_back(acquire_semaphore);
     }
 
     for (uint32_t i = 0; i < p_image_count; ++i) {
-        Ref<Semaphore> submit_semaphore = semaphore_create();
-        ERR_FAIL_COND_V_MSG(submit_semaphore == nullptr, nullptr, "Failed to create semaphore");
+        SemaphoreID submit_semaphore = semaphore_create();
         cmd_queue->submit_semaphores.push_back(submit_semaphore);
     }
 
     return cmd_queue;
 }
 
-Error RDD::command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, Ref<Fence> p_fence,
+Error RDD::command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, FenceID p_fence,
                                              Ref<Swapchain> p_swapchain,
                                              Ref<CommandBuffer> p_cmd_buffer,
                                              uint32_t p_frame_index) {
+    Fence *fence_info = (Fence *)p_fence.id;
+
     // TODO: choose the value queue
     VkQueue queue = queue_families[p_cmd_queue->queue_family][p_cmd_queue->queue_index].queue;
-    VkFence fence = p_fence->vk_fence;
-    VkSemaphore acquire_semaphore = p_cmd_queue->acquire_semaphores[p_frame_index]->vk_semaphore;
-    VkSemaphore submit_semaphore =
-        p_cmd_queue->submit_semaphores[p_swapchain->image_index]->vk_semaphore;
+    VkFence fence = fence_info->vk_fence;
+
+    Semaphore *acquire_semaphore_info =
+        (Semaphore *)p_cmd_queue->acquire_semaphores[p_frame_index].id;
+    Semaphore *submit_semaphore_info =
+        (Semaphore *)p_cmd_queue->submit_semaphores[p_swapchain->image_index].id;
+
+    VkSemaphore acquire_semaphore = acquire_semaphore_info->vk_semaphore;
+    VkSemaphore submit_semaphore = submit_semaphore_info->vk_semaphore;
 
     VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
@@ -1698,10 +1713,10 @@ bool RDD::_determine_swap_chain_format(Surface &p_surface, VkFormat &p_format,
     return found;
 }
 
-void RDD::swapchain_acquire_next_image(Ref<Swapchain> p_swapchain, Ref<Semaphore> p_semaphore,
-                                       Ref<Fence> p_fence) {
-    vkAcquireNextImageKHR(vk_device, p_swapchain->vk_swapchain, UINT64_MAX,
-                          p_semaphore->vk_semaphore, VK_NULL_HANDLE, &p_swapchain->image_index);
+void RDD::swapchain_acquire_next_image(Ref<Swapchain> p_swapchain, SemaphoreID p_semaphore) {
+    Semaphore *semaphore = (Semaphore *)p_semaphore.id;
+    vkAcquireNextImageKHR(vk_device, p_swapchain->vk_swapchain, UINT64_MAX, semaphore->vk_semaphore,
+                          VK_NULL_HANDLE, &p_swapchain->image_index);
 }
 
 Error RDD::swapchain_resize(Ref<Swapchain> p_old_swapchain) {
@@ -2016,31 +2031,34 @@ void RDD::command_render_set_line_width(Ref<CommandBuffer> p_cmd_buffer, float p
 }
 
 /* compute */
-Ref<ComputePipeline> RDD::compute_pipeline_create(const char *p_program_name) {
-    Ref<ComputePipeline> pipeline = new ComputePipeline();
-
+PipelineID RDD::compute_pipeline_create(const char *p_program_name) {
     ShaderProgram p_program = ShaderProgram();
     p_program.load_shader_program(p_program_name, vk_device);
     ERR_FAIL_COND_V_MSG(
-        !p_program.has_compute_shader || p_program.pipeline_type != PIPELINE_TYPE_COMPUTE, nullptr,
-        "Failed to create shader program for compute pipeline");
+        !p_program.has_compute_shader || p_program.pipeline_type != PIPELINE_TYPE_COMPUTE,
+        PipelineID(), "Failed to create shader program for compute pipeline");
 
     VkComputePipelineCreateInfo pipeline_create_info = {};
     pipeline_create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
     pipeline_create_info.stage = p_program.vk_pipeline_stages[0];
     pipeline_create_info.layout = p_program.vk_pipeline_layout;
 
-    VkResult err = vkCreateComputePipelines(vk_device, VK_NULL_HANDLE, 1, &pipeline_create_info,
-                                            nullptr, &pipeline->vk_pipeline);
-    ERR_FAIL_COND_V_MSG(err, nullptr, "Couldn't create Vulkan compute pipelines");
+    VkPipeline vk_pipeline = VK_NULL_HANDLE;
 
-    return pipeline;
+    VkResult err = vkCreateComputePipelines(vk_device, VK_NULL_HANDLE, 1, &pipeline_create_info,
+                                            nullptr, &vk_pipeline);
+    ERR_FAIL_COND_V_MSG(err, PipelineID(), "Couldn't create Vulkan compute pipelines");
+
+    Pipeline *pipeline = memnew(Pipeline);
+    pipeline->vk_pipeline = vk_pipeline;
+
+    return PipelineID(pipeline);
 }
 
-void RDD::command_bind_compute_pipeline(Ref<CommandBuffer> p_cmd_buffer,
-                                        Ref<ComputePipeline> p_pipeline) {
+void RDD::command_bind_compute_pipeline(Ref<CommandBuffer> p_cmd_buffer, PipelineID p_pipeline) {
+    Pipeline *pipeline = (Pipeline *)p_pipeline.id;
     vkCmdBindPipeline(p_cmd_buffer->vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      p_pipeline->vk_pipeline);
+                      pipeline->vk_pipeline);
 }
 
 void RDD::command_bind_compute_uniform_sets(Ref<CommandBuffer> p_cmd_buffer,

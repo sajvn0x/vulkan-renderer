@@ -14,6 +14,45 @@
 
 struct Framebuffer;
 
+struct ID {
+    uint64_t id = 0;
+    _ALWAYS_INLINE_ ID() = default;
+    _ALWAYS_INLINE_ ID(uint64_t p_id) : id(p_id) {}
+};
+
+#define DEFINE_ID(m_name)                                                         \
+    struct m_name##ID : public ID {                                               \
+        _ALWAYS_INLINE_ explicit operator bool() const { return id != 0; }        \
+        _ALWAYS_INLINE_ m_name##ID &operator=(m_name##ID p_other) {               \
+            id = p_other.id;                                                      \
+            return *this;                                                         \
+        }                                                                         \
+        _ALWAYS_INLINE_ bool operator<(const m_name##ID &p_other) const {         \
+            return id < p_other.id;                                               \
+        }                                                                         \
+        _ALWAYS_INLINE_ bool operator==(const m_name##ID &p_other) const {        \
+            return id == p_other.id;                                              \
+        }                                                                         \
+        _ALWAYS_INLINE_ bool operator!=(const m_name##ID &p_other) const {        \
+            return id != p_other.id;                                              \
+        }                                                                         \
+        _ALWAYS_INLINE_ m_name##ID(const m_name##ID &p_other) : ID(p_other.id) {} \
+        _ALWAYS_INLINE_ explicit m_name##ID(uint64_t p_int) : ID(p_int) {}        \
+        _ALWAYS_INLINE_ explicit m_name##ID(void *p_ptr) : ID((uint64_t)p_ptr) {} \
+        _ALWAYS_INLINE_ m_name##ID() = default;                                   \
+    };
+
+DEFINE_ID(Buffer);
+DEFINE_ID(Texture);
+DEFINE_ID(Sampler);
+DEFINE_ID(CommandPool);
+DEFINE_ID(CommandBuffer);
+DEFINE_ID(UniformSet);
+DEFINE_ID(Pipeline);
+DEFINE_ID(RenderPass);
+DEFINE_ID(Semaphore);
+DEFINE_ID(Fence);
+
 /* driver context */
 struct VulkanApiVersion {
     uint32_t api_version = VK_API_VERSION_1_2;
@@ -126,12 +165,12 @@ struct FragmentDensityMapCapabilities {
 };
 
 /* fence */
-struct Fence : RefTarget<Fence> {
+struct Fence {
     VkFence vk_fence = VK_NULL_HANDLE;
 };
 
 /* semaphore */
-struct Semaphore : RefTarget<Semaphore> {
+struct Semaphore {
     VkSemaphore vk_semaphore = VK_NULL_HANDLE;
 };
 
@@ -313,8 +352,8 @@ struct Swapchain : RefTarget<Swapchain> {
 };
 
 struct CommandQueue : RefTarget<CommandQueue> {
-    Vector<Ref<Semaphore>> acquire_semaphores;
-    Vector<Ref<Semaphore>> submit_semaphores;
+    Vector<SemaphoreID> acquire_semaphores;
+    Vector<SemaphoreID> submit_semaphores;
     uint32_t queue_family = 0;
     uint32_t queue_index = 0;
 };
@@ -331,6 +370,10 @@ struct Shader : RefTarget<Shader> {
 };
 
 /* pipeline */
+struct Pipeline {
+    VkPipeline vk_pipeline = VK_NULL_HANDLE;
+};
+
 struct RenderPipeline : RefTarget<RenderPipeline> {
     VkPipeline vk_pipeline = VK_NULL_HANDLE;
     Ref<ShaderProgram> shader_program = nullptr;
@@ -444,8 +487,4 @@ struct BoundUniform {
         return type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC ||
                type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
     }
-};
-
-struct ComputePipeline : RefTarget<ComputePipeline> {
-    VkPipeline vk_pipeline = VK_NULL_HANDLE;
 };

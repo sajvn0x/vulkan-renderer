@@ -35,8 +35,7 @@ Error Renderer::initialize(GLFWwindow* window) {
                         "Failed to create primary command pool");
 
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-        Ref<Fence> fence = driver_device->fence_create();
-        ERR_FAIL_COND_V_MSG(fence == nullptr, ERR_CANT_CREATE, "Couldn't able to create fence");
+        FenceID fence = driver_device->fence_create();
         in_flight_fences.push_back(fence);
     }
 
@@ -60,8 +59,7 @@ Error Renderer::initialize(GLFWwindow* window) {
 void Renderer::begin_frame() {
     driver_device->fence_wait(in_flight_fences[current_frame]);
     driver_device->swapchain_acquire_next_image(swapchain,
-                                                command_queue->acquire_semaphores[current_frame],
-                                                in_flight_fences[current_frame]);
+                                                command_queue->acquire_semaphores[current_frame]);
 
     uint32_t image_index = swapchain->image_index;
 

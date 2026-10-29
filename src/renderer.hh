@@ -18,11 +18,11 @@ class Renderer {
     Ref<CommandPool> primary_command_pool = nullptr;
 
     Ref<CommandQueue> command_queue = nullptr;
-    Vector<Ref<Fence>> in_flight_fences;
+    Vector<FenceID> in_flight_fences;
     Vector<Ref<CommandBuffer>> cmd_buffers;
     uint32_t current_frame = 0;
 
-    Vector<Ref<Fence>> fences;
+    Vector<FenceID> fences;
 
     // pipeline
     DefaultGraphicsPipeline* default_pipeline = nullptr;
