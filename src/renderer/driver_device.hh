@@ -10,6 +10,47 @@
 #define MAX_FRAMES_IN_FLIGHT 2
 
 class RenderingDeviceDriver {
+public:
+    struct ID {
+        uint64_t id = 0;
+        _ALWAYS_INLINE_ ID() = default;
+        _ALWAYS_INLINE_ ID(uint64_t p_id) : id(p_id) {}
+    };
+
+#define DEFINE_ID(m_name)                                                         \
+    struct m_name##ID : public ID {                                               \
+        _ALWAYS_INLINE_ explicit operator bool() const { return id != 0; }        \
+        _ALWAYS_INLINE_ m_name##ID &operator=(m_name##ID p_other) {               \
+            id = p_other.id;                                                      \
+            return *this;                                                         \
+        }                                                                         \
+        _ALWAYS_INLINE_ bool operator<(const m_name##ID &p_other) const {         \
+            return id < p_other.id;                                               \
+        }                                                                         \
+        _ALWAYS_INLINE_ bool operator==(const m_name##ID &p_other) const {        \
+            return id == p_other.id;                                              \
+        }                                                                         \
+        _ALWAYS_INLINE_ bool operator!=(const m_name##ID &p_other) const {        \
+            return id != p_other.id;                                              \
+        }                                                                         \
+        _ALWAYS_INLINE_ m_name##ID(const m_name##ID &p_other) : ID(p_other.id) {} \
+        _ALWAYS_INLINE_ explicit m_name##ID(uint64_t p_int) : ID(p_int) {}        \
+        _ALWAYS_INLINE_ explicit m_name##ID(void *p_ptr) : ID((uint64_t)p_ptr) {} \
+        _ALWAYS_INLINE_ m_name##ID() = default;                                   \
+    };
+
+    DEFINE_ID(Buffer);
+    DEFINE_ID(Texture);
+    DEFINE_ID(Sampler);
+    DEFINE_ID(CommandPool);
+    DEFINE_ID(CommandBuffer);
+    DEFINE_ID(UniformSet);
+    DEFINE_ID(Pipeline);
+    DEFINE_ID(RenderPass);
+    DEFINE_ID(Semaphore);
+    DEFINE_ID(Fence);
+
+private:
     struct Queue {
         VkQueue queue = VK_NULL_HANDLE;
         uint32_t virtual_count = 0;
