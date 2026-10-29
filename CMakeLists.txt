@@ -36,6 +36,7 @@ set(SOURCES
 	src/core/error/error_list.cc
 	src/core/error/error_macros.cc
 	src/core/fs/fs.cc
+	src/core/memory.cc
 
 	# renderer
 	src/renderer.cc
