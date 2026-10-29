@@ -54,7 +54,7 @@ SquaresBGPipeline::SquaresBGPipeline(RenderingDeviceDriver* p_device_driver,
 
 SquaresBGPipeline::~SquaresBGPipeline() { device_driver = nullptr; }
 
-void SquaresBGPipeline::draw(Ref<CommandBuffer> p_cmd_buffer) {
+void SquaresBGPipeline::draw(CommandBufferID p_cmd_buffer) {
     device_driver->command_bind_render_pipeline(p_cmd_buffer, pipeline);
 
     Vector<VkRect2D> viewports;

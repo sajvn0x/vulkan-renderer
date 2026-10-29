@@ -109,14 +109,14 @@ public:
     };
 
     /* buffers */
-    Ref<Buffer> buffer_create(uint64_t p_size, VkBufferUsageFlags p_usage,
-                              MemoryAllocationType p_allocation_type);
-    bool buffer_set_texel_format(Ref<Buffer> p_buffer, VkFormat p_format);
-    void buffer_free(Ref<Buffer> p_buffer, VkFormat p_format);
-    uint64_t buffer_get_allocation_size(Ref<Buffer> p_buffer);
-    uint8_t *buffer_map(Ref<Buffer> p_buffer);
-    void buffer_unmap(Ref<Buffer> p_buffer);
-    uint64_t buffer_get_device_address(Ref<Buffer> p_buffer);
+    BufferID buffer_create(uint64_t p_size, VkBufferUsageFlags p_usage,
+                           MemoryAllocationType p_allocation_type);
+    bool buffer_set_texel_format(BufferID p_buffer, VkFormat p_format);
+    void buffer_free(BufferID p_buffer, VkFormat p_format);
+    uint64_t buffer_get_allocation_size(BufferID p_buffer);
+    uint8_t *buffer_map(BufferID p_buffer);
+    void buffer_unmap(BufferID p_buffer);
+    uint64_t buffer_get_device_address(BufferID p_buffer);
 
     /* texture */
 private:
@@ -124,54 +124,51 @@ private:
         VkSampleCountFlagBits p_requested_sample_count);
 
 public:
-    Ref<Texture> texture_create(const TextureFormat &p_format, const TextureView &p_view);
-    void texture_free(Ref<Texture> p_texture);
+    TextureID texture_create(const TextureFormat &p_format, const TextureView &p_view);
+    void texture_free(TextureID p_texture);
 
     /* sampler */
 public:
-    Ref<Sampler> sampler_create(const SamplerState &p_state);
-    void sampler_free(Ref<Sampler> p_sampler);
+    SamplerID sampler_create(const SamplerState &p_state);
+    void sampler_free(SamplerID p_sampler);
     bool sampler_is_format_supported_for_filter(VkFormat p_format, VkFilter p_filter);
 
     /* framebuffer */
 public:
-    Ref<Framebuffer> framebuffer_create(Ref<RenderPass> p_render_pass,
-                                        Vector<Ref<Texture>> p_attachments, uint32_t p_width,
-                                        uint32_t p_height);
-    void framebuffer_free(Ref<Framebuffer> p_framebuffer);
+    FramebufferID framebuffer_create(RenderPassID p_render_pass, Vector<TextureID> p_attachments,
+                                     uint32_t p_width, uint32_t p_height);
+    void framebuffer_free(FramebufferID p_framebuffer);
 
     /* render pass */
 public:
-    Ref<RenderPass> render_pass_create(Vector<Attachment> &p_attachments,
-                                       Vector<Subpass> &p_subpasses,
-                                       Vector<SubpassDependency> &p_subpass_dependencies);
-    void render_pass_free(Ref<RenderPass> p_render_pass);
+    RenderPassID render_pass_create(Vector<Attachment> &p_attachments, Vector<Subpass> &p_subpasses,
+                                    Vector<SubpassDependency> &p_subpass_dependencies);
+    void render_pass_free(RenderPassID p_render_pass);
 
     // dynamic rendering
-    void command_render_begin_rendering(Ref<CommandBuffer> p_cmd_buffer, VkRect2D p_render_area);
-    void command_render_end_rendering(Ref<CommandBuffer> p_cmd_buffer);
+    void command_render_begin_rendering(CommandBufferID p_cmd_buffer, VkRect2D p_render_area);
+    void command_render_end_rendering(CommandBufferID p_cmd_buffer);
 
 public:
     /* swapchain */
-    Ref<Swapchain> swapchain_create(Surface &p_surface);
-    Error swapchain_resize(Ref<Swapchain> p_old_swapchain = nullptr);
-    void swapchain_acquire_next_image(Ref<Swapchain> p_swapchain, SemaphoreID p_semaphore);
-    Ref<Framebuffer> swapchain_acquire_framebuffer();
+    SwapchainID swapchain_create(Surface &p_surface);
+    Error swapchain_resize(SwapchainID p_old_swapchain = SwapchainID());
+    void swapchain_acquire_next_image(SwapchainID p_swapchain, SemaphoreID p_semaphore);
+    FramebufferID swapchain_acquire_framebuffer();
     bool _determine_swap_chain_format(Surface &p_surface, VkFormat &p_format,
                                       VkColorSpaceKHR &p_color_space);
-    void swapchain_free(Ref<Swapchain> p_swapchain);
+    void swapchain_free(SwapchainID p_swapchain);
 
     /* command queue */
 private:
     uint32_t command_queue_family_get();
 
 public:
-    Ref<CommandQueue> command_queue_create(int p_cmd_queue_family, uint32_t p_image_count);
-    Error command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, FenceID p_fence,
-                                            Ref<Swapchain> p_swapchain,
-                                            Ref<CommandBuffer> p_cmd_buffer,
+    CommandQueueID command_queue_create(int p_cmd_queue_family, uint32_t p_image_count);
+    Error command_queue_execute_and_present(CommandQueueID p_cmd_queue, FenceID p_fence,
+                                            SwapchainID p_swapchain, CommandBufferID p_cmd_buffer,
                                             uint32_t p_frame_index);
-    void command_queue_free(Ref<CommandQueue> p_cmd_queue);
+    void command_queue_free(CommandQueueID p_cmd_queue);
 
     /* uniform sets */
 private:
@@ -185,22 +182,22 @@ private:
     void _descriptor_set_pool_unreference(VkDescriptorPool p_vk_descriptor_pool);
 
 public:
-    Ref<UniformSet> uniform_set_create(Vector<BoundUniform> p_uniforms, Ref<ShaderProgram> p_shader,
-                                       uint32_t p_set_index);
-    void uniform_set_free(Ref<UniformSet> p_uniform_set);
+    UniformSetID uniform_set_create(Vector<BoundUniform> p_uniforms, Ref<ShaderProgram> p_shader,
+                                    uint32_t p_set_index);
+    void uniform_set_free(UniformSetID p_uniform_set);
 
     /* commands */
-    Ref<CommandPool> command_pool_create(uint32_t queue_family_index,
-                                         VkCommandBufferLevel cmd_buffer_level);
-    bool command_pool_reset(Ref<CommandPool> p_cmd_pool);
-    void command_pool_free(Ref<CommandPool> p_cmd_pool);
+    CommandPoolID command_pool_create(uint32_t queue_family_index,
+                                      VkCommandBufferLevel cmd_buffer_level);
+    bool command_pool_reset(CommandPoolID p_cmd_pool);
+    void command_pool_free(CommandPoolID p_cmd_pool);
 
-    Ref<CommandBuffer> command_buffer_create(Ref<CommandPool> p_cmd_pool);
-    bool command_buffer_begin(Ref<CommandBuffer> p_cmd_buffer);
-    bool command_buffer_begin_secondary(Ref<CommandBuffer> p_cmd_buffer);
-    void command_buffer_end(Ref<CommandBuffer> p_cmd_buffer);
-    void command_buffer_execute_secondary(Ref<CommandBuffer> p_cmd_buffer,
-                                          Vector<Ref<CommandBuffer>> p_secondary_cmd_buffers);
+    CommandBufferID command_buffer_create(CommandPoolID p_cmd_pool);
+    bool command_buffer_begin(CommandBufferID p_cmd_buffer);
+    bool command_buffer_begin_secondary(CommandBufferID p_cmd_buffer);
+    void command_buffer_end(CommandBufferID p_cmd_buffer);
+    void command_buffer_execute_secondary(CommandBufferID p_cmd_buffer,
+                                          Vector<CommandBufferID> p_secondary_cmd_buffers);
 
     /* render pipeline */
 public:
@@ -216,52 +213,50 @@ public:
                                       VkRenderPass p_render_pass, uint32_t p_render_subpass);
 
     /* commands */
-    void command_begin_render_pass(Ref<CommandBuffer> p_cmd_buffer, VkRenderPass p_render_pass,
-                                   Ref<Framebuffer> p_framebuffer, VkCommandBufferLevel p_cmd_level,
+    void command_begin_render_pass(CommandBufferID p_cmd_buffer, VkRenderPass p_render_pass,
+                                   FramebufferID p_framebuffer, VkCommandBufferLevel p_cmd_level,
                                    const VkRect2D &p_rect, Vector<VkClearValue> p_clear_values);
-    void command_end_render_pass(Ref<CommandBuffer> p_cmd_buffer);
-    void command_next_render_subpass(Ref<CommandBuffer> p_cmd_buffer,
+    void command_end_render_pass(CommandBufferID p_cmd_buffer);
+    void command_next_render_subpass(CommandBufferID p_cmd_buffer,
                                      VkCommandBufferLevel p_cmd_level);
-    void command_render_set_viewport(Ref<CommandBuffer> p_cmd_buffer, Vector<VkRect2D> p_viewports);
-    void command_render_set_scissor(Ref<CommandBuffer> p_cmd_buffer, Vector<VkRect2D> p_scissors);
-    void command_render_clear_attachments(Ref<CommandBuffer> p_cmd_buffer,
+    void command_render_set_viewport(CommandBufferID p_cmd_buffer, Vector<VkRect2D> p_viewports);
+    void command_render_set_scissor(CommandBufferID p_cmd_buffer, Vector<VkRect2D> p_scissors);
+    void command_render_clear_attachments(CommandBufferID p_cmd_buffer,
                                           Vector<VkClearAttachment> p_attachment_clears,
                                           Vector<VkRect2D> p_rects);
 
     // binding
-    void command_bind_render_pipeline(Ref<CommandBuffer> p_cmd_buffer, PipelineID p_pipeline);
-    void command_bind_render_uniform_sets(Ref<CommandBuffer> p_cmd_buffer,
-                                          Vector<Ref<UniformSet>> p_uniforms,
+    void command_bind_render_pipeline(CommandBufferID p_cmd_buffer, PipelineID p_pipeline);
+    void command_bind_render_uniform_sets(CommandBufferID p_cmd_buffer,
+                                          Vector<UniformSetID> p_uniforms,
                                           Ref<ShaderProgram> p_program, uint32_t p_first_set_index,
                                           uint32_t p_set_count);
 
     // drawing
-    void command_render_draw(Ref<CommandBuffer> p_cmd_buffer, uint32_t p_vertex_count,
+    void command_render_draw(CommandBufferID p_cmd_buffer, uint32_t p_vertex_count,
                              uint32_t p_instance_count, uint32_t p_base_vertex,
                              uint32_t p_first_instance);
-    void command_render_draw_indexed(Ref<CommandBuffer> p_cmd_buffer, uint32_t p_index_count,
+    void command_render_draw_indexed(CommandBufferID p_cmd_buffer, uint32_t p_index_count,
                                      uint32_t p_instance_count, uint32_t p_first_vertex,
                                      int32_t p_vertex_offset, uint32_t p_first_instance);
 
     // buffer binding
-    void command_render_bind_vertex_buffers(Ref<CommandBuffer> p_cmd_buffer,
-                                            uint32_t p_binding_count, Ref<Buffer> p_buffer,
-                                            uint64_t p_offset);
-    void command_render_bind_index_buffer(Ref<CommandBuffer> p_cmd_buffer, Ref<Buffer> p_buffer,
+    void command_render_bind_vertex_buffers(CommandBufferID p_cmd_buffer, uint32_t p_binding_count,
+                                            BufferID p_buffer, uint64_t p_offset);
+    void command_render_bind_index_buffer(CommandBufferID p_cmd_buffer, BufferID p_buffer,
                                           VkIndexType p_index_type, uint64_t p_offset);
 
     // dynamic state
-    void command_render_set_blend_constants(Ref<CommandBuffer> p_cmd_buffer,
-                                            float *p_blend_constants);
-    void command_render_set_line_width(Ref<CommandBuffer> p_cmd_buffer, float p_width);
+    void command_render_set_blend_constants(CommandBufferID p_cmd_buffer, float *p_blend_constants);
+    void command_render_set_line_width(CommandBufferID p_cmd_buffer, float p_width);
 
     /* compute pipeline */
     PipelineID compute_pipeline_create(const char *p_program_name);
 
-    void command_bind_compute_pipeline(Ref<CommandBuffer> p_cmd_buffer, PipelineID p_pipeline);
-    void command_bind_compute_uniform_sets(Ref<CommandBuffer> p_cmd_buffer,
+    void command_bind_compute_pipeline(CommandBufferID p_cmd_buffer, PipelineID p_pipeline);
+    void command_bind_compute_uniform_sets(CommandBufferID p_cmd_buffer,
                                            Vector<UniformSet> p_uniform_sets);
-    void command_compute_dispatch(Ref<CommandBuffer> p_cmd_buffer, uint32_t p_x_groups,
+    void command_compute_dispatch(CommandBufferID p_cmd_buffer, uint32_t p_x_groups,
                                   uint32_t p_y_groups, uint32_t p_z_groups);
 
 public:

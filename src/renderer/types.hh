@@ -49,8 +49,11 @@ DEFINE_ID(CommandBuffer);
 DEFINE_ID(UniformSet);
 DEFINE_ID(Pipeline);
 DEFINE_ID(RenderPass);
+DEFINE_ID(Framebuffer);
+DEFINE_ID(Swapchain);
 DEFINE_ID(Semaphore);
 DEFINE_ID(Fence);
+DEFINE_ID(CommandQueue);
 
 /* driver context */
 struct VulkanApiVersion {
@@ -174,7 +177,7 @@ struct Semaphore {
 };
 
 /* buffers */
-struct Buffer : public RefTarget<Buffer> {
+struct Buffer {
     VkBuffer vk_buffer = VK_NULL_HANDLE;
     struct {
         VmaAllocation handle = nullptr;
@@ -242,7 +245,7 @@ struct TextureFormat {
     }
 };
 
-struct Texture : RefTarget<Texture> {
+struct Texture {
     VkImage vk_image = VK_NULL_HANDLE;
     VkImageView vk_image_view = VK_NULL_HANDLE;
     VkFormat vk_format = VK_FORMAT_UNDEFINED;
@@ -256,8 +259,8 @@ struct Texture : RefTarget<Texture> {
 };
 
 /* sampler */
-struct Sampler : RefTarget<Sampler> {
-    VkSampler handle = VK_NULL_HANDLE;
+struct Sampler {
+    VkSampler vk_sampler = VK_NULL_HANDLE;
 };
 
 struct SamplerState {
@@ -279,19 +282,19 @@ struct SamplerState {
 };
 
 /* commands */
-struct CommandBuffer : RefTarget<CommandBuffer> {
+struct CommandBuffer {
     VkCommandBuffer vk_command_buffer = VK_NULL_HANDLE;
     Framebuffer *active_framebuffer = nullptr;
 };
 
-struct CommandPool : RefTarget<CommandPool> {
+struct CommandPool {
     VkCommandPool vk_command_pool = VK_NULL_HANDLE;
-    Vector<Ref<CommandBuffer>> command_buffers_created;
+    Vector<CommandBufferID> command_buffers_created;
     VkCommandBufferLevel command_buffer_level;
 };
 
 /* render pass */
-struct RenderPass : RefTarget<RenderPass> {
+struct RenderPass {
     VkRenderPass vk_render_pass = VK_NULL_HANDLE;
     bool uses_fragment_density_map = false;
 };
@@ -328,7 +331,7 @@ struct SubpassDependency {
 };
 
 /* framebuffer */
-struct Framebuffer : RefTarget<Framebuffer> {
+struct Framebuffer {
     VkFramebuffer vk_framebuffer = VK_NULL_HANDLE;
     // Only filled in if the framebuffer uses a fragment density map with offsets. Unused otherwise.
     uint32_t fragment_density_map_offsets_layers = 0;
@@ -338,19 +341,19 @@ struct Framebuffer : RefTarget<Framebuffer> {
 };
 
 /* swapchain */
-struct Swapchain : RefTarget<Swapchain> {
+struct Swapchain {
     VkSwapchainKHR vk_swapchain = VK_NULL_HANDLE;
     VkFormat format = VK_FORMAT_UNDEFINED;
     VkColorSpaceKHR color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     Vector<VkImage> images;
     Vector<VkImageView> image_views;
     Vector<VkSemaphore> present_semaphores;
-    Vector<Ref<Framebuffer>> framebuffers;
+    Vector<FramebufferID> framebuffers;
     VkRenderPass vk_render_pass = VK_NULL_HANDLE;
     uint32_t image_index = 0;
 };
 
-struct CommandQueue : RefTarget<CommandQueue> {
+struct CommandQueue {
     Vector<SemaphoreID> acquire_semaphores;
     Vector<SemaphoreID> submit_semaphores;
     uint32_t queue_family = 0;
@@ -465,17 +468,17 @@ struct PipelineColorBlendState {
 };
 
 /* uniform sets */
-struct UniformSet : RefTarget<UniformSet> {
+struct UniformSet {
     VkDescriptorSet vk_descriptor_set = VK_NULL_HANDLE;
     // VkDescriptorPool vk_descriptor_pool = VK_NULL_HANDLE;
-    Vector<Ref<Buffer>> dynamic_buffers;
+    Vector<BufferID> dynamic_buffers;
 };
 
 struct BoundUniform {
     VkDescriptorType type = VK_DESCRIPTOR_TYPE_MAX_ENUM;
     uint32_t binding = 0xffffffff;
     bool immutable_sampler = false;
-    Vector<Ref<Buffer>> buffers;
+    Vector<BufferID> buffers;
 
     _FORCE_INLINE_ bool is_dynamic() const {
         return type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC ||

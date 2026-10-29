@@ -7,8 +7,8 @@ class SquaresBGPipeline {
     const char* program_name = "squares_bg";
 
     PipelineID pipeline;
-    Ref<Buffer> buffer;
-    Vector<Ref<UniformSet>> uniforms;
+    BufferID buffer;
+    Vector<UniformSetID> uniforms;
 
     Ref<ShaderProgram> shader_program = nullptr;
 
@@ -23,6 +23,6 @@ public:
     SquaresBGPipeline(RenderingDeviceDriver* p_device_driver, VkRenderPass p_render_pass);
     ~SquaresBGPipeline();
 
-    void draw(Ref<CommandBuffer> p_cmd_buffer);
+    void draw(CommandBufferID p_cmd_buffer);
     void update_scene_data(const SceneData& p_scene_data);
 };

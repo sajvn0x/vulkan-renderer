@@ -31,15 +31,14 @@ Error Renderer::initialize(GLFWwindow* window) {
 
     // command pool
     primary_command_pool = driver_device->command_pool_create(0, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    ERR_FAIL_COND_V_MSG(primary_command_pool == nullptr, ERR_CANT_CREATE,
-                        "Failed to create primary command pool");
 
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
         FenceID fence = driver_device->fence_create();
         in_flight_fences.push_back(fence);
     }
 
-    uint32_t swapchain_image_count = swapchain->images.size();
+    Swapchain* swapchain_info = (Swapchain*)swapchain.id;
+    uint32_t swapchain_image_count = swapchain_info->images.size();
     cmd_buffers.resize(swapchain_image_count);
     for (uint32_t i = 0; i < swapchain_image_count; ++i) {
         cmd_buffers[i] = driver_device->command_buffer_create(primary_command_pool);
@@ -48,21 +47,24 @@ Error Renderer::initialize(GLFWwindow* window) {
     // command queue
     command_queue = driver_device->command_queue_create(0, swapchain_image_count);
 
-    default_pipeline = new DefaultGraphicsPipeline(driver_device, swapchain->vk_render_pass);
+    default_pipeline = new DefaultGraphicsPipeline(driver_device, swapchain_info->vk_render_pass);
 
-    squares_bg_pipeline = new SquaresBGPipeline(driver_device, swapchain->vk_render_pass);
+    squares_bg_pipeline = new SquaresBGPipeline(driver_device, swapchain_info->vk_render_pass);
 
     return OK;
 }
 
 void Renderer::begin_frame() {
+    Swapchain* swapchain_info = (Swapchain*)swapchain.id;
+    CommandQueue* command_queue_info = (CommandQueue*)command_queue.id;
+
     driver_device->fence_wait(in_flight_fences[current_frame]);
-    driver_device->swapchain_acquire_next_image(swapchain,
-                                                command_queue->acquire_semaphores[current_frame]);
+    driver_device->swapchain_acquire_next_image(
+        swapchain, command_queue_info->acquire_semaphores[current_frame]);
 
-    uint32_t image_index = swapchain->image_index;
+    uint32_t image_index = swapchain_info->image_index;
 
-    Ref<CommandBuffer> cmd_buffer = cmd_buffers[image_index];
+    CommandBufferID cmd_buffer = cmd_buffers[image_index];
     driver_device->command_buffer_begin(cmd_buffer);
 
     Vector<VkClearValue> clear_values;
@@ -72,7 +74,7 @@ void Renderer::begin_frame() {
         .extent = {.width = 1920, .height = 1011},
     };
     driver_device->command_begin_render_pass(
-        cmd_buffer, swapchain->vk_render_pass, swapchain->framebuffers[image_index],
+        cmd_buffer, swapchain_info->vk_render_pass, swapchain_info->framebuffers[image_index],
         VK_COMMAND_BUFFER_LEVEL_PRIMARY, render_area, clear_values);
 
     SquaresBGPipeline::SceneData scene_data = {.resolution = {1280.0f, 720.0f},

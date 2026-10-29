@@ -26,8 +26,8 @@ class DefaultGraphicsPipeline {
 
     PipelineID pipeline;
 
-    Ref<Buffer> vertex_buffer = nullptr;
-    Ref<Buffer> index_buffer = nullptr;
+    BufferID vertex_buffer;
+    BufferID index_buffer;
 
     const char* program_name = "default";
     Ref<ShaderProgram> shader_program = nullptr;
@@ -36,6 +36,5 @@ public:
     DefaultGraphicsPipeline(RenderingDeviceDriver* p_device_driver, VkRenderPass p_render_pass);
     ~DefaultGraphicsPipeline();
 
-    void ready_frame(Ref<CommandBuffer> p_cmd_buffer);
-    void draw(Ref<CommandBuffer> p_cmd_buffer);
+    void draw(CommandBufferID p_cmd_buffer);
 };

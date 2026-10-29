@@ -14,12 +14,12 @@ class Renderer {
     RenderingDriverContext* driver_context = nullptr;
     RenderingDeviceDriver* driver_device = nullptr;
     Surface surface;
-    Ref<Swapchain> swapchain = nullptr;
-    Ref<CommandPool> primary_command_pool = nullptr;
+    SwapchainID swapchain;
+    CommandPoolID primary_command_pool;
 
-    Ref<CommandQueue> command_queue = nullptr;
+    CommandQueueID command_queue;
     Vector<FenceID> in_flight_fences;
-    Vector<Ref<CommandBuffer>> cmd_buffers;
+    Vector<CommandBufferID> cmd_buffers;
     uint32_t current_frame = 0;
 
     Vector<FenceID> fences;

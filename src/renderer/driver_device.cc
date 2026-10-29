@@ -596,12 +596,10 @@ VmaPool RDD::_find_or_create_small_allocs_pool(uint32_t p_mem_type_index) {
 }
 
 /* buffer */
-Ref<Buffer> RDD::buffer_create(uint64_t p_size, VkBufferUsageFlags p_usage,
-                               MemoryAllocationType p_allocation_type) {
+BufferID RDD::buffer_create(uint64_t p_size, VkBufferUsageFlags p_usage,
+                            MemoryAllocationType p_allocation_type) {
 #define STEPIFY(m_number, m_alignment) \
     ((((m_number) + ((m_alignment) - 1)) / (m_alignment)) * (m_alignment))
-
-    Ref<Buffer> buffer = new Buffer();
 
     uint32_t alignment = 16u;
     if (p_usage & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT) {
@@ -667,66 +665,79 @@ Ref<Buffer> RDD::buffer_create(uint64_t p_size, VkBufferUsageFlags p_usage,
     VmaAllocationInfo vma_alloc_info = {};
 
     VkResult err = vkCreateBuffer(vk_device, &buffer_info, nullptr, &vk_buffer);
-    ERR_FAIL_COND_V_MSG(err, nullptr, "Can't create buffer");
+    ERR_FAIL_COND_V_MSG(err, BufferID(), "Can't create buffer");
     err =
         vmaAllocateMemoryForBuffer(allocator, vk_buffer, &alloc_info, &allocation, &vma_alloc_info);
-    ERR_FAIL_COND_V_MSG(err, nullptr, "Can't allocate memory for buffer");
+    ERR_FAIL_COND_V_MSG(err, BufferID(), "Can't allocate memory for buffer");
     err = vmaBindBufferMemory2(allocator, allocation, 0, vk_buffer, nullptr);
-    ERR_FAIL_COND_V_MSG(err, nullptr, "Can't bind memory to buffer");
+    ERR_FAIL_COND_V_MSG(err, BufferID(), "Can't bind memory to buffer");
 
+    Buffer *buffer = memnew(Buffer);
     buffer->vk_buffer = vk_buffer;
     buffer->allocation.handle = allocation;
     buffer->allocation.size = vma_alloc_info.size;
     buffer->size = original_size;
 
-    return buffer;
+    return BufferID(buffer);
 }
 
-bool RDD::buffer_set_texel_format(Ref<Buffer> p_buffer, VkFormat p_format) {
+bool RDD::buffer_set_texel_format(BufferID p_buffer, VkFormat p_format) {
+    Buffer *buffer = (Buffer *)p_buffer.id;
     DEV_ASSERT(!p_buffer->vk_view);
 
     VkBufferViewCreateInfo view_create_info = {};
     view_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO;
-    view_create_info.buffer = p_buffer->vk_buffer;
+    view_create_info.buffer = buffer->vk_buffer;
     view_create_info.format = p_format;
-    view_create_info.range = p_buffer->allocation.size;
+    view_create_info.range = buffer->allocation.size;
 
-    VkResult res = vkCreateBufferView(vk_device, &view_create_info, nullptr, &p_buffer->vk_view);
+    VkResult res = vkCreateBufferView(vk_device, &view_create_info, nullptr, &buffer->vk_view);
     ERR_FAIL_COND_V_MSG(res, false, "Couldn't create Vulkan buffer view");
     return true;
 }
 
-void RDD::buffer_free(Ref<Buffer> p_buffer, VkFormat p_format) {
-    if (p_buffer->vk_view) {
-        vkDestroyBufferView(vk_device, p_buffer->vk_view, nullptr);
+void RDD::buffer_free(BufferID p_buffer, VkFormat p_format) {
+    Buffer *buffer = (Buffer *)p_buffer.id;
+
+    if (buffer->vk_view) {
+        vkDestroyBufferView(vk_device, buffer->vk_view, nullptr);
     }
-    if (p_buffer->is_dynamic()) {
-        vmaUnmapMemory(allocator, p_buffer->allocation.handle);
+    if (buffer->is_dynamic()) {
+        vmaUnmapMemory(allocator, buffer->allocation.handle);
     }
 
-    vmaDestroyBuffer(allocator, p_buffer->vk_buffer, p_buffer->allocation.handle);
+    vmaDestroyBuffer(allocator, buffer->vk_buffer, buffer->allocation.handle);
+    memdelete(buffer);
 }
 
-uint64_t RDD::buffer_get_allocation_size(Ref<Buffer> p_buffer) { return p_buffer->allocation.size; }
+uint64_t RDD::buffer_get_allocation_size(BufferID p_buffer) {
+    Buffer *buffer = (Buffer *)p_buffer.id;
+    return buffer->allocation.size;
+}
 
-uint8_t *RDD::buffer_map(Ref<Buffer> p_buffer) {
+uint8_t *RDD::buffer_map(BufferID p_buffer) {
+    Buffer *buffer = (Buffer *)p_buffer.id;
+
     void *data_ptr = nullptr;
-
-    VkResult err = vmaMapMemory(allocator, p_buffer->allocation.handle, &data_ptr);
+    VkResult err = vmaMapMemory(allocator, buffer->allocation.handle, &data_ptr);
     ERR_FAIL_COND_V_MSG(err, nullptr, "Couldn't map buffer memory");
 
     return (uint8_t *)data_ptr;
 }
 
-void RDD::buffer_unmap(Ref<Buffer> p_buffer) {
-    vmaUnmapMemory(allocator, p_buffer->allocation.handle);
+void RDD::buffer_unmap(BufferID p_buffer) {
+    Buffer *buffer = (Buffer *)p_buffer.id;
+    vmaUnmapMemory(allocator, buffer->allocation.handle);
 }
 
-uint64_t RDD::buffer_get_device_address(Ref<Buffer> p_buffer) {
+uint64_t RDD::buffer_get_device_address(BufferID p_buffer) {
+    Buffer *buffer = (Buffer *)p_buffer.id;
+
     VkBufferDeviceAddressInfo address_info = {};
     address_info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     address_info.pNext = nullptr;
-    address_info.buffer = p_buffer->vk_buffer;
+    address_info.buffer = buffer->vk_buffer;
+
     return vkGetBufferDeviceAddress(vk_device, &address_info);
 }
 
@@ -751,12 +762,9 @@ VkSampleCountFlagBits RDD::_ensure_supported_sample_count(
     return VK_SAMPLE_COUNT_1_BIT;
 }
 
-Ref<Texture> RDD::texture_create(const TextureFormat &p_format, const TextureView &p_view) {
-    Ref<Texture> texture = new Texture();
-
+TextureID RDD::texture_create(const TextureFormat &p_format, const TextureView &p_view) {
     VkImageCreateInfo create_info = {};
     create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-
     create_info.imageType = p_format.texture_type;
     create_info.format = p_format.format;
 
@@ -773,13 +781,14 @@ Ref<Texture> RDD::texture_create(const TextureFormat &p_format, const TextureVie
     create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    VkResult err = vkCreateImage(vk_device, &create_info, nullptr, &texture->vk_image);
-    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr, "Failed to create image");
+    VkImage vk_image = VK_NULL_HANDLE;
+    VkResult err = vkCreateImage(vk_device, &create_info, nullptr, &vk_image);
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, TextureID(), "Failed to create image");
 
     // image view
     VkImageViewCreateInfo image_view_create_info = {};
     image_view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    image_view_create_info.image = texture->vk_image;
+    image_view_create_info.image = vk_image;
     image_view_create_info.viewType = p_view.image_view;
     image_view_create_info.format = p_format.format;
     image_view_create_info.components.r = p_view.swizzle_r;
@@ -790,22 +799,33 @@ Ref<Texture> RDD::texture_create(const TextureFormat &p_format, const TextureVie
     image_view_create_info.subresourceRange.layerCount = create_info.arrayLayers;
     image_view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 
-    err = vkCreateImageView(vk_device, &image_view_create_info, nullptr, &texture->vk_image_view);
-    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr, "Failed to create image views");
+    VkImageView vk_image_view = VK_NULL_HANDLE;
+    err = vkCreateImageView(vk_device, &image_view_create_info, nullptr, &vk_image_view);
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, TextureID(), "Failed to create image views");
 
-    return texture;
+    Texture *texture = memnew(Texture);
+    texture->vk_image = vk_image;
+    texture->vk_image_view = vk_image_view;
+    texture->vk_create_info = create_info;
+    texture->vk_format = p_format.format;
+
+    return TextureID(texture);
 }
 
-void RDD::texture_free(Ref<Texture> p_texture) {
-    vkDestroyImageView(vk_device, p_texture->vk_image_view, nullptr);
-    if (p_texture->allocation.handle) {
-        vkDestroyImage(vk_device, p_texture->vk_image, nullptr);
-        vmaFreeMemory(allocator, p_texture->allocation.handle);
+void RDD::texture_free(TextureID p_texture) {
+    Texture *texture = (Texture *)p_texture.id;
+
+    vkDestroyImageView(vk_device, texture->vk_image_view, nullptr);
+    if (texture->allocation.handle) {
+        vkDestroyImage(vk_device, texture->vk_image, nullptr);
+        vmaFreeMemory(allocator, texture->allocation.handle);
     }
+
+    memdelete(texture);
 }
 
 /* sampler */
-Ref<Sampler> RDD::sampler_create(const SamplerState &p_state) {
+SamplerID RDD::sampler_create(const SamplerState &p_state) {
     VkSamplerCreateInfo sampler_ci = {};
     sampler_ci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     sampler_ci.pNext = nullptr;
@@ -826,15 +846,20 @@ Ref<Sampler> RDD::sampler_create(const SamplerState &p_state) {
     sampler_ci.borderColor = p_state.border_color;
     sampler_ci.unnormalizedCoordinates = p_state.unnormalized_uvw;
 
-    Ref<Sampler> sampler = new Sampler();
-    VkResult res = vkCreateSampler(vk_device, &sampler_ci, nullptr, &sampler->handle);
-    ERR_FAIL_COND_V_MSG(res != VK_SUCCESS, nullptr, "Couldn't create Vulkan sampler");
+    VkSampler vk_sampler = VK_NULL_HANDLE;
+    VkResult res = vkCreateSampler(vk_device, &sampler_ci, nullptr, &vk_sampler);
+    ERR_FAIL_COND_V_MSG(res != VK_SUCCESS, SamplerID(), "Couldn't create Vulkan sampler");
 
-    return sampler;
+    Sampler *sampler = memnew(Sampler);
+    sampler->vk_sampler = vk_sampler;
+
+    return SamplerID(sampler);
 }
 
-void RDD::sampler_free(Ref<Sampler> p_sampler) {
-    vkDestroySampler(vk_device, p_sampler->handle, nullptr);
+void RDD::sampler_free(SamplerID p_sampler) {
+    Sampler *sampler = (Sampler *)p_sampler.id;
+    vkDestroySampler(vk_device, sampler->vk_sampler, nullptr);
+    memdelete(sampler);
 }
 
 bool RDD::sampler_is_format_supported_for_filter(VkFormat p_format, VkFilter p_filter) {
@@ -855,11 +880,9 @@ bool RDD::sampler_is_format_supported_for_filter(VkFormat p_format, VkFilter p_f
 }
 
 // render pass
-Ref<RenderPass> RDD::render_pass_create(Vector<Attachment> &p_attachments,
-                                        Vector<Subpass> &p_subpasses,
-                                        Vector<SubpassDependency> &p_subpass_dependencies) {
-    Ref<RenderPass> render_pass = new RenderPass();
-
+RenderPassID RDD::render_pass_create(Vector<Attachment> &p_attachments,
+                                     Vector<Subpass> &p_subpasses,
+                                     Vector<SubpassDependency> &p_subpass_dependencies) {
     Vector<VkAttachmentDescription2> vk_attachments(p_attachments.size());
 
     for (uint32_t i = 0; i < p_attachments.size(); i++) {
@@ -923,16 +946,25 @@ Ref<RenderPass> RDD::render_pass_create(Vector<Attachment> &p_attachments,
     create_info.correlatedViewMaskCount = 0;
     create_info.pCorrelatedViewMasks = nullptr;
 
-    vkCreateRenderPass2(vk_device, &create_info, nullptr, &render_pass->vk_render_pass);
+    VkRenderPass vk_render_pass = VK_NULL_HANDLE;
+    VkResult result = vkCreateRenderPass2(vk_device, &create_info, nullptr, &vk_render_pass);
+    ERR_FAIL_COND_V_MSG(result, RenderPassID(), "Failed to create render pass");
 
-    return render_pass;
+    RenderPass *render_pass = memnew(RenderPass);
+    render_pass->vk_render_pass = vk_render_pass;
+
+    return RenderPassID(render_pass);
 }
 
-void RDD::render_pass_free(Ref<RenderPass> p_render_pass) {
-    vkDestroyRenderPass(vk_device, p_render_pass->vk_render_pass, nullptr);
+void RDD::render_pass_free(RenderPassID p_render_pass) {
+    RenderPass *render_pass = (RenderPass *)p_render_pass.id;
+    vkDestroyRenderPass(vk_device, render_pass->vk_render_pass, nullptr);
+    memdelete(render_pass);
 }
 
-void RDD::command_render_begin_rendering(Ref<CommandBuffer> p_cmd_buffer, VkRect2D p_render_area) {
+void RDD::command_render_begin_rendering(CommandBufferID p_cmd_buffer, VkRect2D p_render_area) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+
     VkImageView vk_image_view = VK_NULL_HANDLE;
 
     VkImageViewCreateInfo image_view_create_info = {};
@@ -992,22 +1024,25 @@ void RDD::command_render_begin_rendering(Ref<CommandBuffer> p_cmd_buffer, VkRect
     rendering_info.pDepthAttachment = &depth_attachment_info,
     rendering_info.pStencilAttachment = &stencil_attachment_info,
 
-    vkCmdBeginRendering(p_cmd_buffer->vk_command_buffer, &rendering_info);
+    vkCmdBeginRendering(cmd_buffer->vk_command_buffer, &rendering_info);
 }
 
-void RDD::command_render_end_rendering(Ref<CommandBuffer> p_cmd_buffer) {
-    vkCmdEndRendering(p_cmd_buffer->vk_command_buffer);
+void RDD::command_render_end_rendering(CommandBufferID p_cmd_buffer) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+    vkCmdEndRendering(cmd_buffer->vk_command_buffer);
 }
 
-void RDD::command_begin_render_pass(Ref<CommandBuffer> p_cmd_buffer, VkRenderPass p_render_pass,
-                                    Ref<Framebuffer> p_framebuffer,
-                                    VkCommandBufferLevel p_cmd_level, const VkRect2D &p_rect,
-                                    Vector<VkClearValue> p_clear_values) {
+void RDD::command_begin_render_pass(CommandBufferID p_cmd_buffer, VkRenderPass p_render_pass,
+                                    FramebufferID p_framebuffer, VkCommandBufferLevel p_cmd_level,
+                                    const VkRect2D &p_rect, Vector<VkClearValue> p_clear_values) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+    Framebuffer *framebuffer = (Framebuffer *)p_framebuffer.id;
+
     VkRenderPassBeginInfo render_pass_begin = {};
     render_pass_begin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     render_pass_begin.pNext = nullptr;
     render_pass_begin.renderPass = p_render_pass;
-    render_pass_begin.framebuffer = p_framebuffer->vk_framebuffer;
+    render_pass_begin.framebuffer = framebuffer->vk_framebuffer;
     render_pass_begin.renderArea = p_rect;
     render_pass_begin.clearValueCount = p_clear_values.size();
     render_pass_begin.pClearValues = p_clear_values.data();
@@ -1015,27 +1050,31 @@ void RDD::command_begin_render_pass(Ref<CommandBuffer> p_cmd_buffer, VkRenderPas
     VkSubpassContents vk_subpass_contents = p_cmd_level == VK_COMMAND_BUFFER_LEVEL_PRIMARY
                                                 ? VK_SUBPASS_CONTENTS_INLINE
                                                 : VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS;
-    vkCmdBeginRenderPass(p_cmd_buffer->vk_command_buffer, &render_pass_begin, vk_subpass_contents);
+    vkCmdBeginRenderPass(cmd_buffer->vk_command_buffer, &render_pass_begin, vk_subpass_contents);
 }
 
-void RDD::command_end_render_pass(Ref<CommandBuffer> p_cmd_buffer) {
+void RDD::command_end_render_pass(CommandBufferID p_cmd_buffer) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+
     DEV_ASSERT(p_cmd_buffer->active_framebuffer != nullptr);
 
-    vkCmdEndRenderPass(p_cmd_buffer->vk_command_buffer);
-    p_cmd_buffer->active_framebuffer = nullptr;
+    vkCmdEndRenderPass(cmd_buffer->vk_command_buffer);
+    cmd_buffer->active_framebuffer = nullptr;
 }
 
-void RDD::command_next_render_subpass(Ref<CommandBuffer> p_cmd_buffer,
+void RDD::command_next_render_subpass(CommandBufferID p_cmd_buffer,
                                       VkCommandBufferLevel p_cmd_level) {
     VkSubpassContents vk_subpass_contents = p_cmd_level == VK_COMMAND_BUFFER_LEVEL_PRIMARY
                                                 ? VK_SUBPASS_CONTENTS_INLINE
                                                 : VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS;
 
-    vkCmdNextSubpass(p_cmd_buffer->vk_command_buffer, vk_subpass_contents);
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+    vkCmdNextSubpass(cmd_buffer->vk_command_buffer, vk_subpass_contents);
 }
 
-void RDD::command_render_set_viewport(Ref<CommandBuffer> p_cmd_buffer,
-                                      Vector<VkRect2D> p_viewports) {
+void RDD::command_render_set_viewport(CommandBufferID p_cmd_buffer, Vector<VkRect2D> p_viewports) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+
     Vector<VkViewport> vk_viewports(p_viewports.size());
     for (uint32_t i = 0; i < p_viewports.size(); i++) {
         vk_viewports[i] = {};
@@ -1047,16 +1086,19 @@ void RDD::command_render_set_viewport(Ref<CommandBuffer> p_cmd_buffer,
         vk_viewports[i].maxDepth = 1.f;
     }
 
-    vkCmdSetViewport(p_cmd_buffer->vk_command_buffer, 0, p_viewports.size(), vk_viewports.data());
+    vkCmdSetViewport(cmd_buffer->vk_command_buffer, 0, p_viewports.size(), vk_viewports.data());
 }
 
-void RDD::command_render_set_scissor(Ref<CommandBuffer> p_cmd_buffer, Vector<VkRect2D> p_scissors) {
-    vkCmdSetScissor(p_cmd_buffer->vk_command_buffer, 0, p_scissors.size(), p_scissors.data());
+void RDD::command_render_set_scissor(CommandBufferID p_cmd_buffer, Vector<VkRect2D> p_scissors) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+    vkCmdSetScissor(cmd_buffer->vk_command_buffer, 0, p_scissors.size(), p_scissors.data());
 }
 
-void RDD::command_render_clear_attachments(Ref<CommandBuffer> p_cmd_buffer,
+void RDD::command_render_clear_attachments(CommandBufferID p_cmd_buffer,
                                            Vector<VkClearAttachment> p_attachment_clears,
                                            Vector<VkRect2D> p_rects) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+
     Vector<VkClearAttachment> vk_clear_attachments(p_attachment_clears.size());
 
     Vector<VkClearRect> vk_rects(p_rects.size());
@@ -1067,46 +1109,50 @@ void RDD::command_render_clear_attachments(Ref<CommandBuffer> p_cmd_buffer,
         vk_rects[i].layerCount = 1;
     }
 
-    vkCmdClearAttachments(p_cmd_buffer->vk_command_buffer, p_attachment_clears.size(),
+    vkCmdClearAttachments(cmd_buffer->vk_command_buffer, p_attachment_clears.size(),
                           p_attachment_clears.data(), vk_rects.size(), vk_rects.data());
 }
 
-Ref<Framebuffer> RDD::framebuffer_create(Ref<RenderPass> p_render_pass,
-                                         Vector<Ref<Texture>> p_attachments, uint32_t p_width,
-                                         uint32_t p_height) {
-    Ref<Framebuffer> framebuffer = new Framebuffer();
+FramebufferID RDD::framebuffer_create(RenderPassID p_render_pass, Vector<TextureID> p_attachments,
+                                      uint32_t p_width, uint32_t p_height) {
+    RenderPass *render_pass = (RenderPass *)p_render_pass.id;
 
     Vector<VkImageView> vk_image_views(p_attachments.size());
-
     for (uint32_t i = 0; i < p_attachments.size(); ++i) {
-        vk_image_views[i] = p_attachments[i]->vk_image_view;
+        Texture *texture = (Texture *)p_attachments[i].id;
+        vk_image_views[i] = texture->vk_image_view;
     }
 
     VkFramebufferCreateInfo framebuffer_create_info = {};
     framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    framebuffer_create_info.renderPass = p_render_pass->vk_render_pass;
+    framebuffer_create_info.renderPass = render_pass->vk_render_pass;
     framebuffer_create_info.attachmentCount = p_attachments.size();
     framebuffer_create_info.pAttachments = vk_image_views.data();
     framebuffer_create_info.width = p_width;
     framebuffer_create_info.height = p_height;
     framebuffer_create_info.layers = 1;
 
-    VkResult err = vkCreateFramebuffer(vk_device, &framebuffer_create_info, nullptr,
-                                       &framebuffer->vk_framebuffer);
-    ERR_FAIL_COND_V_MSG(err, nullptr, "Couldn't create Vulkan framebuffer");
+    VkFramebuffer vk_framebuffer = VK_NULL_HANDLE;
+    VkResult err =
+        vkCreateFramebuffer(vk_device, &framebuffer_create_info, nullptr, &vk_framebuffer);
+    ERR_FAIL_COND_V_MSG(err, FramebufferID(), "Couldn't create Vulkan framebuffer");
 
-    return framebuffer;
+    Framebuffer *framebuffer = memnew(Framebuffer);
+    framebuffer->vk_framebuffer = vk_framebuffer;
+
+    return FramebufferID(framebuffer);
 }
 
-void RDD::framebuffer_free(Ref<Framebuffer> p_framebuffer) {
-    vkDestroyFramebuffer(vk_device, p_framebuffer->vk_framebuffer, nullptr);
+void RDD::framebuffer_free(FramebufferID p_framebuffer) {
+    Framebuffer *framebuffer = (Framebuffer *)p_framebuffer.id;
+    vkDestroyFramebuffer(vk_device, framebuffer->vk_framebuffer, nullptr);
+    memdelete(framebuffer);
 }
 
 uint32_t RDD::command_queue_family_get() { return 0; }
 
-Ref<CommandQueue> RDD::command_queue_create(int p_cmd_queue_family, uint32_t p_image_count) {
-    Ref<CommandQueue> cmd_queue = new CommandQueue();
-
+CommandQueueID RDD::command_queue_create(int p_cmd_queue_family, uint32_t p_image_count) {
+    CommandQueue *cmd_queue = new CommandQueue();
     cmd_queue->queue_family = p_cmd_queue_family;
 
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
@@ -1119,23 +1165,25 @@ Ref<CommandQueue> RDD::command_queue_create(int p_cmd_queue_family, uint32_t p_i
         cmd_queue->submit_semaphores.push_back(submit_semaphore);
     }
 
-    return cmd_queue;
+    return CommandQueueID(cmd_queue);
 }
 
-Error RDD::command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, FenceID p_fence,
-                                             Ref<Swapchain> p_swapchain,
-                                             Ref<CommandBuffer> p_cmd_buffer,
+Error RDD::command_queue_execute_and_present(CommandQueueID p_cmd_queue, FenceID p_fence,
+                                             SwapchainID p_swapchain, CommandBufferID p_cmd_buffer,
                                              uint32_t p_frame_index) {
+    CommandQueue *cmd_queue = (CommandQueue *)p_cmd_queue.id;
     Fence *fence_info = (Fence *)p_fence.id;
+    Swapchain *swapchain = (Swapchain *)p_swapchain.id;
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
 
     // TODO: choose the value queue
-    VkQueue queue = queue_families[p_cmd_queue->queue_family][p_cmd_queue->queue_index].queue;
+    VkQueue queue = queue_families[cmd_queue->queue_family][cmd_queue->queue_index].queue;
     VkFence fence = fence_info->vk_fence;
 
     Semaphore *acquire_semaphore_info =
-        (Semaphore *)p_cmd_queue->acquire_semaphores[p_frame_index].id;
+        (Semaphore *)cmd_queue->acquire_semaphores[p_frame_index].id;
     Semaphore *submit_semaphore_info =
-        (Semaphore *)p_cmd_queue->submit_semaphores[p_swapchain->image_index].id;
+        (Semaphore *)cmd_queue->submit_semaphores[swapchain->image_index].id;
 
     VkSemaphore acquire_semaphore = acquire_semaphore_info->vk_semaphore;
     VkSemaphore submit_semaphore = submit_semaphore_info->vk_semaphore;
@@ -1148,7 +1196,7 @@ Error RDD::command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, Fenc
     submit_info.pWaitSemaphores = &acquire_semaphore;
     submit_info.pWaitDstStageMask = wait_stages;
     submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &p_cmd_buffer->vk_command_buffer;
+    submit_info.pCommandBuffers = &cmd_buffer->vk_command_buffer;
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores = &submit_semaphore;
 
@@ -1160,105 +1208,118 @@ Error RDD::command_queue_execute_and_present(Ref<CommandQueue> p_cmd_queue, Fenc
     present_info.waitSemaphoreCount = 1;
     present_info.pWaitSemaphores = &submit_semaphore;
     present_info.swapchainCount = 1;
-    present_info.pSwapchains = &p_swapchain->vk_swapchain;
-    present_info.pImageIndices = &p_swapchain->image_index;
+    present_info.pSwapchains = &swapchain->vk_swapchain;
+    present_info.pImageIndices = &swapchain->image_index;
 
     vkQueuePresentKHR(queue, &present_info);
 
     return OK;
 }
 
-void command_queue_free(Ref<CommandQueue> p_cmd_queue) {}
+void command_queue_free(CommandQueueID p_cmd_queue) {}
 
 /* commands */
 // command pool
-Ref<CommandPool> RDD::command_pool_create(uint32_t queue_family_index,
-                                          VkCommandBufferLevel cmd_buffer_level) {
-    Ref<CommandPool> cmd_pool = new CommandPool();
-
+CommandPoolID RDD::command_pool_create(uint32_t p_queue_family_index,
+                                       VkCommandBufferLevel p_cmd_buffer_level) {
     VkCommandPoolCreateInfo cmd_pool_info = {};
     cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    cmd_pool_info.queueFamilyIndex = queue_family_index;
+    cmd_pool_info.queueFamilyIndex = p_queue_family_index;
     // enable command buffer reset
     cmd_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-    VkResult res =
-        vkCreateCommandPool(vk_device, &cmd_pool_info, nullptr, &cmd_pool->vk_command_pool);
-    ERR_FAIL_COND_V_MSG(res, nullptr, "Couldn't create Vulkan command pool");
+    VkCommandPool vk_cmd_pool = VK_NULL_HANDLE;
+    VkResult res = vkCreateCommandPool(vk_device, &cmd_pool_info, nullptr, &vk_cmd_pool);
+    ERR_FAIL_COND_V_MSG(res, CommandPoolID(), "Couldn't create Vulkan command pool");
 
-    return cmd_pool;
+    CommandPool *cmd_pool = memnew(CommandPool);
+    cmd_pool->vk_command_pool = vk_cmd_pool;
+    cmd_pool->command_buffer_level = p_cmd_buffer_level;
+
+    return CommandPoolID(cmd_pool);
 }
 
-bool RDD::command_pool_reset(Ref<CommandPool> p_cmd_pool) {
-    VkResult err = vkResetCommandPool(vk_device, p_cmd_pool->vk_command_pool, 0);
+bool RDD::command_pool_reset(CommandPoolID p_cmd_pool) {
+    CommandPool *cmd_pool = (CommandPool *)p_cmd_pool.id;
+    VkResult err = vkResetCommandPool(vk_device, cmd_pool->vk_command_pool, 0);
     ERR_FAIL_COND_V_MSG(err, false, "Couldn't reset Vulkan command pool");
 
     return true;
 }
 
-void RDD::command_pool_free(Ref<CommandPool> p_cmd_pool) {
-    vkDestroyCommandPool(vk_device, p_cmd_pool->vk_command_pool, nullptr);
+void RDD::command_pool_free(CommandPoolID p_cmd_pool) {
+    CommandPool *cmd_pool = (CommandPool *)p_cmd_pool.id;
+    vkDestroyCommandPool(vk_device, cmd_pool->vk_command_pool, nullptr);
 }
 
 // command buffer
-Ref<CommandBuffer> RDD::command_buffer_create(Ref<CommandPool> p_cmd_pool) {
-    Ref<CommandBuffer> command_buffer = new CommandBuffer();
-
+CommandBufferID RDD::command_buffer_create(CommandPoolID p_cmd_pool) {
+    CommandPool *cmd_pool = (CommandPool *)p_cmd_pool.id;
     VkCommandBufferAllocateInfo cmd_buf_info = {};
     cmd_buf_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_buf_info.commandPool = p_cmd_pool->vk_command_pool;
+    cmd_buf_info.commandPool = cmd_pool->vk_command_pool;
     cmd_buf_info.commandBufferCount = 1;
 
-    if (p_cmd_pool->command_buffer_level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    if (cmd_pool->command_buffer_level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
         cmd_buf_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     } else {
         cmd_buf_info.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
     };
 
-    VkResult err =
-        vkAllocateCommandBuffers(vk_device, &cmd_buf_info, &command_buffer->vk_command_buffer);
-    ERR_FAIL_COND_V_MSG(err, nullptr, "Couldn't allocate Vulkan command buffer");
+    VkCommandBuffer vk_command_buffer = VK_NULL_HANDLE;
+    VkResult err = vkAllocateCommandBuffers(vk_device, &cmd_buf_info, &vk_command_buffer);
+    ERR_FAIL_COND_V_MSG(err, CommandBufferID(), "Couldn't allocate Vulkan command buffer");
 
-    return command_buffer;
+    CommandBuffer *command_buffer = memnew(CommandBuffer);
+    command_buffer->vk_command_buffer = vk_command_buffer;
+
+    return CommandBufferID(command_buffer);
 }
 
-bool RDD::command_buffer_begin(Ref<CommandBuffer> p_cmd_buffer) {
+bool RDD::command_buffer_begin(CommandBufferID p_cmd_buffer) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+
     VkCommandBufferBeginInfo cmd_buf_begin_info = {};
     cmd_buf_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     cmd_buf_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    VkResult err = vkBeginCommandBuffer(p_cmd_buffer->vk_command_buffer, &cmd_buf_begin_info);
+    VkResult err = vkBeginCommandBuffer(cmd_buffer->vk_command_buffer, &cmd_buf_begin_info);
     ERR_FAIL_COND_V_MSG(err, false, "Couldn't begin Vulkan command buffer");
 
     return true;
 }
 
-bool RDD::command_buffer_begin_secondary(Ref<CommandBuffer> p_cmd_buffer) {
+bool RDD::command_buffer_begin_secondary(CommandBufferID p_cmd_buffer) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+
     VkCommandBufferBeginInfo cmd_buf_begin_info = {};
     cmd_buf_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     cmd_buf_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT |
                                VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
 
-    VkResult err = vkBeginCommandBuffer(p_cmd_buffer->vk_command_buffer, &cmd_buf_begin_info);
+    VkResult err = vkBeginCommandBuffer(cmd_buffer->vk_command_buffer, &cmd_buf_begin_info);
     ERR_FAIL_COND_V_MSG(err, false, "Couldn't begin Vulkan command buffer");
 
     return true;
 }
 
-void RDD::command_buffer_end(Ref<CommandBuffer> p_cmd_buffer) {
-    vkEndCommandBuffer(p_cmd_buffer->vk_command_buffer);
+void RDD::command_buffer_end(CommandBufferID p_cmd_buffer) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+    vkEndCommandBuffer(cmd_buffer->vk_command_buffer);
 }
 
-void RDD::command_buffer_execute_secondary(Ref<CommandBuffer> p_cmd_buffer,
-                                           Vector<Ref<CommandBuffer>> p_secondary_cmd_buffers) {
+void RDD::command_buffer_execute_secondary(CommandBufferID p_cmd_buffer,
+                                           Vector<CommandBufferID> p_secondary_cmd_buffers) {
+    CommandBuffer *command_buffer = (CommandBuffer *)p_cmd_buffer.id;
     Vector<VkCommandBuffer> secondary_command_buffers;
-    secondary_command_buffers.resize(p_secondary_cmd_buffers.size());
 
+    secondary_command_buffers.resize(p_secondary_cmd_buffers.size());
     for (uint32_t i = 0; i < p_secondary_cmd_buffers.size(); i++) {
-        secondary_command_buffers[i] = p_secondary_cmd_buffers[i]->vk_command_buffer;
+        CommandBuffer *c = (CommandBuffer *)p_secondary_cmd_buffers[i].id;
+        secondary_command_buffers[i] = c->vk_command_buffer;
     }
 
-    vkCmdExecuteCommands(p_cmd_buffer->vk_command_buffer, p_secondary_cmd_buffers.size(),
+    vkCmdExecuteCommands(command_buffer->vk_command_buffer, p_secondary_cmd_buffers.size(),
                          secondary_command_buffers.data());
 }
 
@@ -1438,13 +1499,16 @@ PipelineID RDD::render_pipeline_create(
 }
 
 /* swapchain */
-Ref<Swapchain> RDD::swapchain_create(Surface &p_surface) {
-    Ref<Swapchain> swapchain = new Swapchain();
+SwapchainID RDD::swapchain_create(Surface &p_surface) {
+    // TODO: `memnew` not be able to allocate memory for the containers
+    // Swapchain *swapchain = memnew(Swapchain);
+    Swapchain *swapchain = new Swapchain();
 
     VkSurfaceCapabilitiesKHR surface_capabilities = {};
     VkResult err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, p_surface.vk_surface,
                                                              &surface_capabilities);
-    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr, "Couldn't get Vulkan surface capabilities");
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, SwapchainID(),
+                        "Couldn't get Vulkan surface capabilities");
 
     if (surface_capabilities.currentExtent.width != 0xFFFFFFFF) {
         surface_capabilities.currentExtent.width =
@@ -1468,7 +1532,7 @@ Ref<Swapchain> RDD::swapchain_create(Surface &p_surface) {
     }
 
     if (p_surface.width == 0 || p_surface.height == 0) {
-        return nullptr;
+        return SwapchainID();
     }
 
     Vector<VkPresentModeKHR> present_modes;
@@ -1476,12 +1540,14 @@ Ref<Swapchain> RDD::swapchain_create(Surface &p_surface) {
 
     err = vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, p_surface.vk_surface,
                                                     &present_modes_count, nullptr);
-    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr, "Couldn't get Vulkan surface present modes");
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, SwapchainID(),
+                        "Couldn't get Vulkan surface present modes");
 
     present_modes.resize(present_modes_count);
     err = vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, p_surface.vk_surface,
                                                     &present_modes_count, present_modes.data());
-    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr, "Couldn't get Vulkan surface present modes");
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, SwapchainID(),
+                        "Couldn't get Vulkan surface present modes");
 
     VkPresentModeKHR present_mode = VkPresentModeKHR::VK_PRESENT_MODE_FIFO_KHR;
     String present_mode_name = "Enabled";
@@ -1514,7 +1580,7 @@ Ref<Swapchain> RDD::swapchain_create(Surface &p_surface) {
     VkColorSpaceKHR color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
     if (!_determine_swap_chain_format(p_surface, format, color_space)) {
-        ERR_FAIL_V_MSG(nullptr, "Vulkan surface did not return any valid formats");
+        ERR_FAIL_V_MSG(SwapchainID(), "Vulkan surface did not return any valid formats");
     } else {
         swapchain->format = format;
         swapchain->color_space = color_space;
@@ -1545,16 +1611,18 @@ Ref<Swapchain> RDD::swapchain_create(Surface &p_surface) {
 
     VkResult result =
         vkCreateSwapchainKHR(vk_device, &swapchain_create_info, nullptr, &swapchain->vk_swapchain);
-    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, nullptr, "Couldn't able to create swapchain");
+    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, SwapchainID(), "Couldn't able to create swapchain");
 
     uint32_t image_count = 0;
     result = vkGetSwapchainImagesKHR(vk_device, swapchain->vk_swapchain, &image_count, nullptr);
-    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, nullptr, "Couldn't get Vulkan swapchain images");
+    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, SwapchainID(),
+                        "Couldn't get Vulkan swapchain images");
 
     swapchain->images.resize(image_count);
     result = vkGetSwapchainImagesKHR(vk_device, swapchain->vk_swapchain, &image_count,
                                      swapchain->images.data());
-    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, nullptr, "Couldn't get Vulkan swapchain images");
+    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, SwapchainID(),
+                        "Couldn't get Vulkan swapchain images");
 
     VkImageViewCreateInfo view_create_info = {};
     view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1568,16 +1636,16 @@ Ref<Swapchain> RDD::swapchain_create(Surface &p_surface) {
     view_create_info.subresourceRange.levelCount = 1;
     view_create_info.subresourceRange.layerCount = 1;
 
-    swapchain->image_views.reserve(image_count);
+    swapchain->image_views.resize(image_count);
 
     VkImageView image_view;
     for (uint32_t i = 0; i < image_count; i++) {
         view_create_info.image = swapchain->images[i];
         result = vkCreateImageView(vk_device, &view_create_info, nullptr, &image_view);
-        ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, nullptr,
+        ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, SwapchainID(),
                             "Couldn't create Vulkan image view for swapchain image");
 
-        swapchain->image_views.push_back(image_view);
+        swapchain->image_views[i] = image_view;
     }
 
     swapchain->framebuffers.reserve(image_count);
@@ -1612,7 +1680,7 @@ Ref<Swapchain> RDD::swapchain_create(Surface &p_surface) {
 
     VkRenderPass vk_render_pass = VK_NULL_HANDLE;
     _create_render_pass(vk_device, &pass_info, nullptr, &vk_render_pass);
-    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr,
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, SwapchainID(),
                         "Couldn't create Vulkan render pass for swapchain");
 
     swapchain->vk_render_pass = vk_render_pass;
@@ -1629,14 +1697,14 @@ Ref<Swapchain> RDD::swapchain_create(Surface &p_surface) {
     for (uint32_t i = 0; i < image_count; i++) {
         fb_create_info.pAttachments = &swapchain->image_views[i];
         err = vkCreateFramebuffer(vk_device, &fb_create_info, nullptr, &vk_framebuffer);
-        ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr,
+        ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, SwapchainID(),
                             "Couldn't create Vulkan framebuffer for swapchain image");
 
-        Ref<Framebuffer> framebuffer = new Framebuffer();
+        Framebuffer *framebuffer = memnew(Framebuffer);
         framebuffer->vk_framebuffer = vk_framebuffer;
         framebuffer->swap_chain_image = swapchain->images[i];
         framebuffer->swap_chain_image_subresource_range = view_create_info.subresourceRange;
-        swapchain->framebuffers.push_back(framebuffer);
+        swapchain->framebuffers.push_back(FramebufferID(framebuffer));
     }
 
     VkSemaphore vk_semaphore = VK_NULL_HANDLE;
@@ -1644,13 +1712,13 @@ Ref<Swapchain> RDD::swapchain_create(Surface &p_surface) {
         VkSemaphoreCreateInfo create_info = {};
         create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
         err = vkCreateSemaphore(vk_device, &create_info, nullptr, &vk_semaphore);
-        ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr,
+        ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, SwapchainID(),
                             "Couldn't create Vulkan semaphore for swapchain image");
 
         swapchain->present_semaphores.push_back(vk_semaphore);
     }
 
-    return swapchain;
+    return SwapchainID(swapchain);
 }
 
 bool RDD::_determine_swap_chain_format(Surface &p_surface, VkFormat &p_format,
@@ -1712,13 +1780,15 @@ bool RDD::_determine_swap_chain_format(Surface &p_surface, VkFormat &p_format,
     return found;
 }
 
-void RDD::swapchain_acquire_next_image(Ref<Swapchain> p_swapchain, SemaphoreID p_semaphore) {
+void RDD::swapchain_acquire_next_image(SwapchainID p_swapchain, SemaphoreID p_semaphore) {
+    Swapchain *swapchain = (Swapchain *)p_swapchain.id;
     Semaphore *semaphore = (Semaphore *)p_semaphore.id;
-    vkAcquireNextImageKHR(vk_device, p_swapchain->vk_swapchain, UINT64_MAX, semaphore->vk_semaphore,
-                          VK_NULL_HANDLE, &p_swapchain->image_index);
+
+    vkAcquireNextImageKHR(vk_device, swapchain->vk_swapchain, UINT64_MAX, semaphore->vk_semaphore,
+                          VK_NULL_HANDLE, &swapchain->image_index);
 }
 
-Error RDD::swapchain_resize(Ref<Swapchain> p_old_swapchain) {
+Error RDD::swapchain_resize(SwapchainID p_old_swapchain) {
     if (enabled_device_extension_names.find(VK_KHR_SHARED_PRESENTABLE_IMAGE_EXTENSION_NAME) !=
             enabled_device_extension_names.end() &&
         p_old_swapchain) {
@@ -1729,10 +1799,12 @@ Error RDD::swapchain_resize(Ref<Swapchain> p_old_swapchain) {
     return OK;
 }
 
-Ref<Framebuffer> RDD::swapchain_acquire_framebuffer() { return nullptr; }
+FramebufferID RDD::swapchain_acquire_framebuffer() { return FramebufferID(); }
 
-void RDD::swapchain_free(Ref<Swapchain> swapchain) {
+void RDD::swapchain_free(SwapchainID p_swapchain) {
+    Swapchain *swapchain = (Swapchain *)p_swapchain.id;
     vkDestroySwapchainKHR(vk_device, swapchain->vk_swapchain, nullptr);
+    delete swapchain;
 }
 
 static void _convert_subpass_attachments(const VkAttachmentReference2 *p_attachment_references_2,
@@ -1887,10 +1959,8 @@ VkDescriptorPool RDD::_descriptor_set_pool_create(const VkDescriptorType &p_type
 
 void RDD::_descriptor_set_pool_unreference(VkDescriptorPool p_vk_descriptor_pool) {}
 
-Ref<UniformSet> RDD::uniform_set_create(Vector<BoundUniform> p_uniforms,
-                                        Ref<ShaderProgram> p_shader, uint32_t p_set_index) {
-    Ref<UniformSet> uniform_set = new UniformSet();
-
+UniformSetID RDD::uniform_set_create(Vector<BoundUniform> p_uniforms, Ref<ShaderProgram> p_shader,
+                                     uint32_t p_set_index) {
     VkWriteDescriptorSet *vk_writes =
         (VkWriteDescriptorSet *)alloca(sizeof(VkWriteDescriptorSet) * p_uniforms.size());
     uint32_t writes_amount = 0;
@@ -1905,7 +1975,7 @@ Ref<UniformSet> RDD::uniform_set_create(Vector<BoundUniform> p_uniforms,
 
         switch (uniform.type) {
             case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: {
-                Ref<Buffer> buffer = uniform.buffers[0];
+                Buffer *buffer = (Buffer *)uniform.buffers[0].id;
 
                 VkDescriptorBufferInfo *vk_buf_info =
                     (VkDescriptorBufferInfo *)alloca(sizeof(VkDescriptorImageInfo));
@@ -1918,7 +1988,7 @@ Ref<UniformSet> RDD::uniform_set_create(Vector<BoundUniform> p_uniforms,
             } break;
 
             case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: {
-                Ref<Buffer> buffer = uniform.buffers[0];
+                Buffer *buffer = (Buffer *)uniform.buffers[0].id;
 
                 VkDescriptorBufferInfo *vk_buf_info =
                     (VkDescriptorBufferInfo *)alloca(sizeof(VkDescriptorImageInfo));
@@ -1931,7 +2001,7 @@ Ref<UniformSet> RDD::uniform_set_create(Vector<BoundUniform> p_uniforms,
 
             } break;
             default:
-                ERR_FAIL_V_MSG(nullptr,
+                ERR_FAIL_V_MSG(UniformSetID(),
                                "Descriptor Set other than VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER and "
                                "UNIFORM_TYPE_STORAGE_BUFFER not supported");
         }
@@ -1953,80 +2023,94 @@ Ref<UniformSet> RDD::uniform_set_create(Vector<BoundUniform> p_uniforms,
     VkDescriptorSet vk_descriptor_set = VK_NULL_HANDLE;
     VkResult res =
         vkAllocateDescriptorSets(vk_device, &descriptor_set_allocate_info, &vk_descriptor_set);
-    ERR_FAIL_COND_V_MSG(res, nullptr, "Couldn't allocate Vulkan descriptor sets");
+    ERR_FAIL_COND_V_MSG(res, UniformSetID(), "Couldn't allocate Vulkan descriptor sets");
 
     for (uint32_t i = 0; i < writes_amount; i++) {
         vk_writes[i].dstSet = vk_descriptor_set;
     }
     vkUpdateDescriptorSets(vk_device, writes_amount, vk_writes, 0, nullptr);
 
+    UniformSet *uniform_set = memnew(UniformSet);
     uniform_set->vk_descriptor_set = vk_descriptor_set;
 
-    return uniform_set;
+    return UniformSetID(uniform_set);
 }
 
-void RDD::uniform_set_free(Ref<UniformSet> p_uniform_set) {}
+void RDD::uniform_set_free(UniformSetID p_uniform_set) {}
 
-void RDD::command_bind_render_pipeline(Ref<CommandBuffer> p_cmd_buffer, PipelineID p_pipeline) {
+void RDD::command_bind_render_pipeline(CommandBufferID p_cmd_buffer, PipelineID p_pipeline) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
     Pipeline *pipeline = (Pipeline *)p_pipeline.id;
-    vkCmdBindPipeline(p_cmd_buffer->vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+
+    vkCmdBindPipeline(cmd_buffer->vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       pipeline->vk_pipeline);
 }
 
-void RDD::command_bind_render_uniform_sets(Ref<CommandBuffer> p_cmd_buffer,
-                                           Vector<Ref<UniformSet>> p_uniforms,
+void RDD::command_bind_render_uniform_sets(CommandBufferID p_cmd_buffer,
+                                           Vector<UniformSetID> p_uniforms,
                                            Ref<ShaderProgram> p_shader, uint32_t p_first_set_index,
                                            uint32_t p_set_count) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+
     Vector<VkDescriptorSet> sets;
     sets.clear();
     sets.resize(p_set_count);
 
     for (uint32_t i = 0; i < p_set_count; ++i) {
-        sets[i] = p_uniforms[i]->vk_descriptor_set;
+        UniformSet *uniform = (UniformSet *)p_uniforms[i].id;
+        sets[i] = uniform->vk_descriptor_set;
     }
 
-    vkCmdBindDescriptorSets(p_cmd_buffer->vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+    vkCmdBindDescriptorSets(cmd_buffer->vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             p_shader->vk_pipeline_layout, p_first_set_index, p_set_count, &sets[0],
                             0, nullptr);
 }
 
 // drawing
-void RDD::command_render_draw(Ref<CommandBuffer> p_cmd_buffer, uint32_t p_vertex_count,
+void RDD::command_render_draw(CommandBufferID p_cmd_buffer, uint32_t p_vertex_count,
                               uint32_t p_instance_count, uint32_t p_base_vertex,
                               uint32_t p_first_instance) {
-    vkCmdDraw(p_cmd_buffer->vk_command_buffer, p_vertex_count, p_instance_count, p_base_vertex,
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+    vkCmdDraw(cmd_buffer->vk_command_buffer, p_vertex_count, p_instance_count, p_base_vertex,
               p_first_instance);
 }
 
-void RDD::command_render_draw_indexed(Ref<CommandBuffer> p_cmd_buffer, uint32_t p_index_count,
+void RDD::command_render_draw_indexed(CommandBufferID p_cmd_buffer, uint32_t p_index_count,
                                       uint32_t p_instance_count, uint32_t p_first_vertex,
                                       int32_t p_vertex_offset, uint32_t p_first_instance) {
-    vkCmdDrawIndexed(p_cmd_buffer->vk_command_buffer, p_index_count, p_instance_count,
-                     p_first_vertex, p_vertex_offset, p_first_instance);
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+    vkCmdDrawIndexed(cmd_buffer->vk_command_buffer, p_index_count, p_instance_count, p_first_vertex,
+                     p_vertex_offset, p_first_instance);
 }
 
 // buffer binding
-void RDD::command_render_bind_vertex_buffers(Ref<CommandBuffer> p_cmd_buffer,
-                                             uint32_t p_binding_count, Ref<Buffer> p_buffer,
-                                             uint64_t p_offset) {
-    vkCmdBindVertexBuffers(p_cmd_buffer->vk_command_buffer, 0, p_binding_count,
-                           &p_buffer->vk_buffer, &p_offset);
+void RDD::command_render_bind_vertex_buffers(CommandBufferID p_cmd_buffer, uint32_t p_binding_count,
+                                             BufferID p_buffer, uint64_t p_offset) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+    Buffer *buffer = (Buffer *)p_buffer.id;
+
+    vkCmdBindVertexBuffers(cmd_buffer->vk_command_buffer, 0, p_binding_count, &buffer->vk_buffer,
+                           &p_offset);
 }
 
-void RDD::command_render_bind_index_buffer(Ref<CommandBuffer> p_cmd_buffer, Ref<Buffer> p_buffer,
+void RDD::command_render_bind_index_buffer(CommandBufferID p_cmd_buffer, BufferID p_buffer,
                                            VkIndexType p_index_type, uint64_t p_offset) {
-    vkCmdBindIndexBuffer(p_cmd_buffer->vk_command_buffer, p_buffer->vk_buffer, p_offset,
-                         p_index_type);
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+    Buffer *buffer = (Buffer *)p_buffer.id;
+
+    vkCmdBindIndexBuffer(cmd_buffer->vk_command_buffer, buffer->vk_buffer, p_offset, p_index_type);
 }
 
 // dynamic state
-void RDD::command_render_set_blend_constants(Ref<CommandBuffer> p_cmd_buffer,
+void RDD::command_render_set_blend_constants(CommandBufferID p_cmd_buffer,
                                              float *p_blend_constants) {
-    vkCmdSetBlendConstants(p_cmd_buffer->vk_command_buffer, p_blend_constants);
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+    vkCmdSetBlendConstants(cmd_buffer->vk_command_buffer, p_blend_constants);
 }
 
-void RDD::command_render_set_line_width(Ref<CommandBuffer> p_cmd_buffer, float p_width) {
-    vkCmdSetLineWidth(p_cmd_buffer->vk_command_buffer, p_width);
+void RDD::command_render_set_line_width(CommandBufferID p_cmd_buffer, float p_width) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+    vkCmdSetLineWidth(cmd_buffer->vk_command_buffer, p_width);
 }
 
 /* compute */
@@ -2054,18 +2138,21 @@ PipelineID RDD::compute_pipeline_create(const char *p_program_name) {
     return PipelineID(pipeline);
 }
 
-void RDD::command_bind_compute_pipeline(Ref<CommandBuffer> p_cmd_buffer, PipelineID p_pipeline) {
+void RDD::command_bind_compute_pipeline(CommandBufferID p_cmd_buffer, PipelineID p_pipeline) {
     Pipeline *pipeline = (Pipeline *)p_pipeline.id;
-    vkCmdBindPipeline(p_cmd_buffer->vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+
+    vkCmdBindPipeline(cmd_buffer->vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                       pipeline->vk_pipeline);
 }
 
-void RDD::command_bind_compute_uniform_sets(Ref<CommandBuffer> p_cmd_buffer,
+void RDD::command_bind_compute_uniform_sets(CommandBufferID p_cmd_buffer,
                                             Vector<UniformSet> p_uniform_sets) {}
 
-void RDD::command_compute_dispatch(Ref<CommandBuffer> p_cmd_buffer, uint32_t p_x_groups,
+void RDD::command_compute_dispatch(CommandBufferID p_cmd_buffer, uint32_t p_x_groups,
                                    uint32_t p_y_groups, uint32_t p_z_groups) {
-    vkCmdDispatch(p_cmd_buffer->vk_command_buffer, p_x_groups, p_y_groups, p_z_groups);
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+    vkCmdDispatch(cmd_buffer->vk_command_buffer, p_x_groups, p_y_groups, p_z_groups);
 }
 
 RDD::RenderingDeviceDriver(RenderingDriverContext *p_context_driver)

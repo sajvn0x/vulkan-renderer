@@ -75,15 +75,7 @@ DefaultGraphicsPipeline::DefaultGraphicsPipeline(RenderingDeviceDriver* p_device
 
 DefaultGraphicsPipeline::~DefaultGraphicsPipeline() { device_driver = nullptr; }
 
-void DefaultGraphicsPipeline::ready_frame(Ref<CommandBuffer> p_cmd_buffer) {
-    // Ref<Buffer> transfer_buffer = device_driver->buffer_create(1000,
-    // VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-    // RenderingDeviceDriver::MEMORY_ALLOCATION_TYPE_GPU_MAPPABLE); uint8_t *data =
-    // device_driver->buffer_map(transfer_buffer); memcpy(data, vertices.data(), (size_t)
-    // sizeof(vertices)); device_driver->buffer_unmap(transfer_buffer);
-}
-
-void DefaultGraphicsPipeline::draw(Ref<CommandBuffer> p_cmd_buffer) {
+void DefaultGraphicsPipeline::draw(CommandBufferID p_cmd_buffer) {
     device_driver->command_bind_render_pipeline(p_cmd_buffer, pipeline);
 
     Vector<VkRect2D> viewports;
