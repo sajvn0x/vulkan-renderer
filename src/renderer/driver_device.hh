@@ -7,6 +7,10 @@
 #include "renderer/shader_container.hh"
 #include "types.hh"
 
+#define ALLOCA(m_size) ((m_size != 0) ? alloca(m_size) : nullptr)
+#define ALLOCA_ARRAY(m_type, m_count) ((m_type *)ALLOCA(sizeof(m_type) * (m_count)))
+#define ALLOCA_SINGLE(m_type) ALLOCA_ARRAY(m_type, 1)
+
 #define MAX_FRAMES_IN_FLIGHT 2
 
 class RenderingDeviceDriver {

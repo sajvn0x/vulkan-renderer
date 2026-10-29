@@ -47,95 +47,6 @@ Error RDD::initialize(uint32_t p_device_index, uint32_t p_frame_count) {
     return OK;
 }
 
-/* fence */
-Ref<Fence> RDD::fence_create() {
-    Ref<Fence> fence = new Fence();
-
-    VkFenceCreateInfo fence_create_info = {};
-    fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fence_create_info.pNext = nullptr;
-    fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-    VkResult result = vkCreateFence(vk_device, &fence_create_info, nullptr, &fence->vk_fence);
-
-    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, nullptr, "Couldn't create vulkan fence");
-
-    return fence;
-}
-
-Error RDD::fence_wait(Ref<Fence> p_fence) {
-    VkResult fence_status = vkGetFenceStatus(vk_device, p_fence->vk_fence);
-    if (fence_status == VK_NOT_READY) {
-        VkResult err = vkWaitForFences(vk_device, 1, &p_fence->vk_fence, VK_TRUE, UINT64_MAX);
-        ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, FAILED, "Couldn't wait for Vulkan fence");
-    }
-
-    VkResult err = vkResetFences(vk_device, 1, &p_fence->vk_fence);
-    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, FAILED, "Couldn't reset Vulkan fence");
-
-    return OK;
-}
-
-void RDD::fence_free(Ref<Fence> p_fence) { vkDestroyFence(vk_device, p_fence->vk_fence, nullptr); }
-
-/* semaphore */
-Ref<Semaphore> RDD::semaphore_create() {
-    Ref<Semaphore> semaphore = new Semaphore();
-
-    VkSemaphoreCreateInfo semaphore_create_info = {};
-    semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    VkResult err =
-        vkCreateSemaphore(vk_device, &semaphore_create_info, nullptr, &semaphore->vk_semaphore);
-    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr, "Couldn't create Vulkan semaphore");
-
-    return semaphore;
-}
-
-void RDD::semaphore_free(Ref<Semaphore> p_semaphore) {
-    vkDestroySemaphore(vk_device, p_semaphore->vk_semaphore, nullptr);
-}
-
-void RDD::command_pipeline_barrier(RDD::CommandBufferID p_cmd_buffer,
-                                   VkMemoryBarrier2 &p_memory_barrier,
-                                   Vector<VkBufferMemoryBarrier2> &p_buffer_barriers,
-                                   Vector<VkImageMemoryBarrier2> &p_image_barriers) {
-    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
-
-    VkDependencyInfo dependency_info = {};
-    dependency_info.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-    dependency_info.memoryBarrierCount = 1;
-    dependency_info.pMemoryBarriers = &p_memory_barrier;
-    dependency_info.bufferMemoryBarrierCount = p_buffer_barriers.size();
-    dependency_info.pBufferMemoryBarriers = p_buffer_barriers.data();
-    dependency_info.imageMemoryBarrierCount = p_image_barriers.size();
-    dependency_info.pImageMemoryBarriers = p_image_barriers.data();
-
-    vkCmdPipelineBarrier2(cmd_buffer->vk_command_buffer, &dependency_info);
-}
-
-static const uint32_t SMALL_ALLOCATION_MAX_SIZE = 4096;
-
-VmaPool RDD::_find_or_create_small_allocs_pool(uint32_t p_mem_type_index) {
-    if (small_allocs_pools.count(p_mem_type_index) > 0) {
-        return small_allocs_pools[p_mem_type_index];
-    }
-
-    VmaPoolCreateInfo pci = {};
-    pci.memoryTypeIndex = p_mem_type_index;
-    pci.flags = 0;
-    pci.blockSize = 0;
-    pci.minBlockCount = 0;
-    pci.maxBlockCount = SIZE_MAX;
-    pci.priority = 0.5f;
-    pci.minAllocationAlignment = 0;
-    pci.pMemoryAllocateNext = nullptr;
-    VmaPool pool = VK_NULL_HANDLE;
-    VkResult res = vmaCreatePool(allocator, &pci, &pool);
-    small_allocs_pools[p_mem_type_index] = pool;
-    ERR_FAIL_COND_V_MSG(res, pool, "Couldn't create Vulkan memory allocator pool");
-    return pool;
-}
-
 void RDD::_register_requested_device_extension(const String &p_extension_name, bool p_required) {
     requested_device_extensions[p_extension_name] = p_required;
 }
@@ -583,6 +494,95 @@ Error RDD::_initialize_allocator() {
     ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, ERR_CANT_CREATE, "vmaCreateAllocator failed");
 
     return OK;
+}
+
+/* fence */
+Ref<Fence> RDD::fence_create() {
+    Ref<Fence> fence = new Fence();
+
+    VkFenceCreateInfo fence_create_info = {};
+    fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fence_create_info.pNext = nullptr;
+    fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    VkResult result = vkCreateFence(vk_device, &fence_create_info, nullptr, &fence->vk_fence);
+
+    ERR_FAIL_COND_V_MSG(result != VK_SUCCESS, nullptr, "Couldn't create vulkan fence");
+
+    return fence;
+}
+
+Error RDD::fence_wait(Ref<Fence> p_fence) {
+    VkResult fence_status = vkGetFenceStatus(vk_device, p_fence->vk_fence);
+    if (fence_status == VK_NOT_READY) {
+        VkResult err = vkWaitForFences(vk_device, 1, &p_fence->vk_fence, VK_TRUE, UINT64_MAX);
+        ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, FAILED, "Couldn't wait for Vulkan fence");
+    }
+
+    VkResult err = vkResetFences(vk_device, 1, &p_fence->vk_fence);
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, FAILED, "Couldn't reset Vulkan fence");
+
+    return OK;
+}
+
+void RDD::fence_free(Ref<Fence> p_fence) { vkDestroyFence(vk_device, p_fence->vk_fence, nullptr); }
+
+/* semaphore */
+Ref<Semaphore> RDD::semaphore_create() {
+    Ref<Semaphore> semaphore = new Semaphore();
+
+    VkSemaphoreCreateInfo semaphore_create_info = {};
+    semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    VkResult err =
+        vkCreateSemaphore(vk_device, &semaphore_create_info, nullptr, &semaphore->vk_semaphore);
+    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, nullptr, "Couldn't create Vulkan semaphore");
+
+    return semaphore;
+}
+
+void RDD::semaphore_free(Ref<Semaphore> p_semaphore) {
+    vkDestroySemaphore(vk_device, p_semaphore->vk_semaphore, nullptr);
+}
+
+void RDD::command_pipeline_barrier(RDD::CommandBufferID p_cmd_buffer,
+                                   VkMemoryBarrier2 &p_memory_barrier,
+                                   Vector<VkBufferMemoryBarrier2> &p_buffer_barriers,
+                                   Vector<VkImageMemoryBarrier2> &p_image_barriers) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+
+    VkDependencyInfo dependency_info = {};
+    dependency_info.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    dependency_info.memoryBarrierCount = 1;
+    dependency_info.pMemoryBarriers = &p_memory_barrier;
+    dependency_info.bufferMemoryBarrierCount = p_buffer_barriers.size();
+    dependency_info.pBufferMemoryBarriers = p_buffer_barriers.data();
+    dependency_info.imageMemoryBarrierCount = p_image_barriers.size();
+    dependency_info.pImageMemoryBarriers = p_image_barriers.data();
+
+    vkCmdPipelineBarrier2(cmd_buffer->vk_command_buffer, &dependency_info);
+}
+
+static const uint32_t SMALL_ALLOCATION_MAX_SIZE = 4096;
+
+VmaPool RDD::_find_or_create_small_allocs_pool(uint32_t p_mem_type_index) {
+    if (small_allocs_pools.count(p_mem_type_index) > 0) {
+        return small_allocs_pools[p_mem_type_index];
+    }
+
+    VmaPoolCreateInfo pci = {};
+    pci.memoryTypeIndex = p_mem_type_index;
+    pci.flags = 0;
+    pci.blockSize = 0;
+    pci.minBlockCount = 0;
+    pci.maxBlockCount = SIZE_MAX;
+    pci.priority = 0.5f;
+    pci.minAllocationAlignment = 0;
+    pci.pMemoryAllocateNext = nullptr;
+    VmaPool pool = VK_NULL_HANDLE;
+    VkResult res = vmaCreatePool(allocator, &pci, &pool);
+    small_allocs_pools[p_mem_type_index] = pool;
+    ERR_FAIL_COND_V_MSG(res, pool, "Couldn't create Vulkan memory allocator pool");
+    return pool;
 }
 
 /* buffer */
