@@ -3,9 +3,14 @@
 #include "vulkan/vulkan_core.h"
 
 DefaultGraphicsPipeline::DefaultGraphicsPipeline(RenderingDeviceDriver* p_device_driver,
-                                                 const char* p_program_name,
                                                  VkRenderPass p_render_pass) {
     device_driver = p_device_driver;
+
+    shader_program = new ShaderProgram();
+    Error err = shader_program->load_shader_program(program_name, p_device_driver->get_device());
+    if (err != OK || shader_program->pipeline_type != PIPELINE_TYPE_GRAPHICS) {
+        return;
+    }
 
     // _create_render_pass(p_format);
 
@@ -48,7 +53,7 @@ DefaultGraphicsPipeline::DefaultGraphicsPipeline(RenderingDeviceDriver* p_device
     vertex_input.pVertexAttributeDescriptions = attributes;
 
     pipeline = device_driver->render_pipeline_create(
-        p_program_name, primitive, vertex_input, rasterization, multisample, depth_stencil,
+        shader_program, primitive, vertex_input, rasterization, multisample, depth_stencil,
         color_blend, {0}, dynamic_states, p_render_pass, 0);
 
     vertex_buffer =

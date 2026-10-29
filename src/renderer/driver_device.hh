@@ -15,6 +15,8 @@
 
 class RenderingDeviceDriver {
 public:
+    VkDevice get_device() { return vk_device; }
+
 private:
     struct Queue {
         VkQueue queue = VK_NULL_HANDLE;
@@ -92,8 +94,8 @@ public:
                                   Vector<VkBufferMemoryBarrier2> &p_buffer_barriers,
                                   Vector<VkImageMemoryBarrier2> &p_image_barriers);
 
+    /* memory */
 private:
-    /* Memory */
     VmaAllocator allocator = nullptr;
     HashMap<uint32_t, VmaPool> small_allocs_pools;
 
@@ -117,6 +119,7 @@ public:
     uint64_t buffer_get_device_address(Ref<Buffer> p_buffer);
 
     /* texture */
+private:
     VkSampleCountFlagBits _ensure_supported_sample_count(
         VkSampleCountFlagBits p_requested_sample_count);
 
@@ -130,13 +133,21 @@ public:
     void sampler_free(Ref<Sampler> p_sampler);
     bool sampler_is_format_supported_for_filter(VkFormat p_format, VkFilter p_filter);
 
+    /* framebuffer */
 public:
+    Ref<Framebuffer> framebuffer_create(Ref<RenderPass> p_render_pass,
+                                        Vector<Ref<Texture>> p_attachments, uint32_t p_width,
+                                        uint32_t p_height);
+    void framebuffer_free(Ref<Framebuffer> p_framebuffer);
+
     /* render pass */
+public:
     Ref<RenderPass> render_pass_create(Vector<Attachment> &p_attachments,
                                        Vector<Subpass> &p_subpasses,
                                        Vector<SubpassDependency> &p_subpass_dependencies);
     void render_pass_free(Ref<RenderPass> p_render_pass);
 
+    // dynamic rendering
     void command_render_begin_rendering(Ref<CommandBuffer> p_cmd_buffer, VkRect2D p_render_area);
     void command_render_end_rendering(Ref<CommandBuffer> p_cmd_buffer);
 
@@ -150,13 +161,7 @@ public:
                                       VkColorSpaceKHR &p_color_space);
     void swapchain_free(Ref<Swapchain> p_swapchain);
 
-public:
-    /* framebuffer */
-    Ref<Framebuffer> framebuffer_create(Ref<RenderPass> p_render_pass,
-                                        Vector<Ref<Texture>> p_attachments, uint32_t p_width,
-                                        uint32_t p_height);
-    void framebuffer_free(Ref<Framebuffer> p_framebuffer);
-
+    /* command queue */
 private:
     uint32_t command_queue_family_get();
 
@@ -185,13 +190,11 @@ public:
     void uniform_set_free(Ref<UniformSet> p_uniform_set);
 
     /* commands */
-    // command pool
     Ref<CommandPool> command_pool_create(uint32_t queue_family_index,
                                          VkCommandBufferLevel cmd_buffer_level);
     bool command_pool_reset(Ref<CommandPool> p_cmd_pool);
     void command_pool_free(Ref<CommandPool> p_cmd_pool);
 
-    // command buffer
     Ref<CommandBuffer> command_buffer_create(Ref<CommandPool> p_cmd_pool);
     bool command_buffer_begin(Ref<CommandBuffer> p_cmd_buffer);
     bool command_buffer_begin_secondary(Ref<CommandBuffer> p_cmd_buffer);
@@ -201,14 +204,16 @@ public:
 
     /* render pipeline */
 public:
-    Ref<RenderPipeline> render_pipeline_create(
-        String program_name, VkPrimitiveTopology p_render_primitive,
-        VkPipelineVertexInputStateCreateInfo vertex_input,
-        PipelineRasterizationState p_rasterization_state,
-        PipelineMultisampleState p_multisample_state,
-        PipelineDepthStencilState p_depth_stencil_state, PipelineColorBlendState p_blend_state,
-        Vector<int32_t> p_color_attachments, Vector<VkDynamicState> p_dynamic_state,
-        VkRenderPass p_render_pass, uint32_t p_render_subpass);
+    PipelineID render_pipeline_create(Ref<ShaderProgram> p_shader_program,
+                                      VkPrimitiveTopology p_render_primitive,
+                                      VkPipelineVertexInputStateCreateInfo vertex_input,
+                                      PipelineRasterizationState p_rasterization_state,
+                                      PipelineMultisampleState p_multisample_state,
+                                      PipelineDepthStencilState p_depth_stencil_state,
+                                      PipelineColorBlendState p_blend_state,
+                                      Vector<int32_t> p_color_attachments,
+                                      Vector<VkDynamicState> p_dynamic_state,
+                                      VkRenderPass p_render_pass, uint32_t p_render_subpass);
 
     /* commands */
     void command_begin_render_pass(Ref<CommandBuffer> p_cmd_buffer, VkRenderPass p_render_pass,
@@ -224,8 +229,7 @@ public:
                                           Vector<VkRect2D> p_rects);
 
     // binding
-    void command_bind_render_pipeline(Ref<CommandBuffer> p_cmd_buffer,
-                                      Ref<RenderPipeline> p_render_pipeline);
+    void command_bind_render_pipeline(Ref<CommandBuffer> p_cmd_buffer, PipelineID p_pipeline);
     void command_bind_render_uniform_sets(Ref<CommandBuffer> p_cmd_buffer,
                                           Vector<Ref<UniformSet>> p_uniforms,
                                           Ref<ShaderProgram> p_program, uint32_t p_first_set_index,

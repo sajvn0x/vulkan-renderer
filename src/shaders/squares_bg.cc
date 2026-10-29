@@ -4,6 +4,12 @@ SquaresBGPipeline::SquaresBGPipeline(RenderingDeviceDriver* p_device_driver,
                                      VkRenderPass p_render_pass) {
     device_driver = p_device_driver;
 
+    shader_program = new ShaderProgram();
+    Error err = shader_program->load_shader_program(program_name, p_device_driver->get_device());
+    if (err != OK || shader_program->pipeline_type != PIPELINE_TYPE_GRAPHICS) {
+        return;
+    }
+
     VkPrimitiveTopology primitive = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     PipelineRasterizationState rasterization = {};
     PipelineMultisampleState multisample = {};
@@ -20,7 +26,7 @@ SquaresBGPipeline::SquaresBGPipeline(RenderingDeviceDriver* p_device_driver,
     vertex_input.pVertexAttributeDescriptions = nullptr;
 
     pipeline = device_driver->render_pipeline_create(
-        program_name, primitive, vertex_input, rasterization, multisample, depth_stencil,
+        shader_program, primitive, vertex_input, rasterization, multisample, depth_stencil,
         color_blend, {0}, dynamic_states, p_render_pass, 0);
 
     uniforms.clear();
@@ -43,7 +49,7 @@ SquaresBGPipeline::SquaresBGPipeline(RenderingDeviceDriver* p_device_driver,
     bound_uniforms[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     bound_uniforms[0].binding = 0;
 
-    uniforms[0] = device_driver->uniform_set_create(bound_uniforms, pipeline->shader_program, 0);
+    uniforms[0] = device_driver->uniform_set_create(bound_uniforms, shader_program, 0);
 }
 
 SquaresBGPipeline::~SquaresBGPipeline() { device_driver = nullptr; }
@@ -63,8 +69,7 @@ void SquaresBGPipeline::draw(Ref<CommandBuffer> p_cmd_buffer) {
     scissors[0].extent = {.width = 1920, .height = 1080};
     scissors[0].offset = {.x = 0, .y = 0};
 
-    device_driver->command_bind_render_uniform_sets(p_cmd_buffer, uniforms,
-                                                    pipeline->shader_program, 0, 1);
+    device_driver->command_bind_render_uniform_sets(p_cmd_buffer, uniforms, shader_program, 0, 1);
 
     device_driver->command_render_set_viewport(p_cmd_buffer, viewports);
     device_driver->command_render_set_scissor(p_cmd_buffer, scissors);

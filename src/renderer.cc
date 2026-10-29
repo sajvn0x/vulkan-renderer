@@ -48,8 +48,7 @@ Error Renderer::initialize(GLFWwindow* window) {
     // command queue
     command_queue = driver_device->command_queue_create(0, swapchain_image_count);
 
-    default_pipeline =
-        new DefaultGraphicsPipeline(driver_device, "default", swapchain->vk_render_pass);
+    default_pipeline = new DefaultGraphicsPipeline(driver_device, swapchain->vk_render_pass);
 
     squares_bg_pipeline = new SquaresBGPipeline(driver_device, swapchain->vk_render_pass);
 

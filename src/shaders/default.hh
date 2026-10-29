@@ -24,14 +24,16 @@ class DefaultGraphicsPipeline {
 
     RenderingDeviceDriver* device_driver = nullptr;
 
-    Ref<RenderPipeline> pipeline = nullptr;
+    PipelineID pipeline;
 
     Ref<Buffer> vertex_buffer = nullptr;
     Ref<Buffer> index_buffer = nullptr;
 
+    const char* program_name = "default";
+    Ref<ShaderProgram> shader_program = nullptr;
+
 public:
-    DefaultGraphicsPipeline(RenderingDeviceDriver* p_device_driver, const char* p_program_name,
-                            VkRenderPass p_render_pass);
+    DefaultGraphicsPipeline(RenderingDeviceDriver* p_device_driver, VkRenderPass p_render_pass);
     ~DefaultGraphicsPipeline();
 
     void ready_frame(Ref<CommandBuffer> p_cmd_buffer);

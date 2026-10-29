@@ -6,9 +6,11 @@ class SquaresBGPipeline {
     RenderingDeviceDriver* device_driver = nullptr;
     const char* program_name = "squares_bg";
 
-    Ref<RenderPipeline> pipeline = nullptr;
+    PipelineID pipeline;
     Ref<Buffer> buffer;
     Vector<Ref<UniformSet>> uniforms;
+
+    Ref<ShaderProgram> shader_program = nullptr;
 
 public:
     struct alignas(16) SceneData {

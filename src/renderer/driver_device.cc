@@ -933,10 +933,18 @@ void RDD::render_pass_free(Ref<RenderPass> p_render_pass) {
 }
 
 void RDD::command_render_begin_rendering(Ref<CommandBuffer> p_cmd_buffer, VkRect2D p_render_area) {
+    VkImageView vk_image_view = VK_NULL_HANDLE;
+
+    VkImageViewCreateInfo image_view_create_info = {};
+    image_view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    // image_view_create_info.flags = ;
+    // image_view_create_info.image = ;
+    // image_view_create_info.viewType = ;
+    // image_view_create_info.format = ;
+
     VkRenderingAttachmentInfo color_attachment_info = {
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .pNext = nullptr,
-        .imageView = nullptr,
+        .imageView = vk_image_view,
         .imageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         .resolveMode = VK_RESOLVE_MODE_NONE,
         .resolveImageView = nullptr,
@@ -954,7 +962,6 @@ void RDD::command_render_begin_rendering(Ref<CommandBuffer> p_cmd_buffer, VkRect
 
     VkRenderingAttachmentInfo depth_attachment_info = {
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .pNext = nullptr,
         .imageView = nullptr,
         .imageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         .resolveMode = VK_RESOLVE_MODE_NONE,
@@ -979,7 +986,6 @@ void RDD::command_render_begin_rendering(Ref<CommandBuffer> p_cmd_buffer, VkRect
 
     VkRenderingInfo rendering_info = {};
     rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    rendering_info.flags = 0;
     rendering_info.renderArea = p_render_area, rendering_info.layerCount = 1,
     rendering_info.viewMask = 0, rendering_info.colorAttachmentCount = 1,
     rendering_info.pColorAttachments = &color_attachment_info,
@@ -1256,21 +1262,13 @@ void RDD::command_buffer_execute_secondary(Ref<CommandBuffer> p_cmd_buffer,
                          secondary_command_buffers.data());
 }
 
-Ref<RenderPipeline> RDD::render_pipeline_create(
-    String program_name, VkPrimitiveTopology p_render_primitive,
+PipelineID RDD::render_pipeline_create(
+    Ref<ShaderProgram> p_shader_program, VkPrimitiveTopology p_render_primitive,
     VkPipelineVertexInputStateCreateInfo vertex_input,
     PipelineRasterizationState p_rasterization_state, PipelineMultisampleState p_multisample_state,
     PipelineDepthStencilState p_depth_stencil_state, PipelineColorBlendState p_blend_state,
     Vector<int32_t> p_color_attachments, Vector<VkDynamicState> p_dynamic_state,
     VkRenderPass p_render_pass, uint32_t p_render_subpass) {
-    Ref<RenderPipeline> render_pipeline = new RenderPipeline();
-
-    // load the shader program
-    Ref<ShaderProgram> shader_program = new ShaderProgram();
-    Error err = shader_program->load_shader_program(program_name, vk_device);
-    ERR_FAIL_COND_V(err != OK, nullptr);
-    ERR_FAIL_COND_V(shader_program->pipeline_type != PIPELINE_TYPE_GRAPHICS, nullptr);
-
     // vertex input
     Vector<VkPipelineVertexInputStateCreateInfo> vertex_input_state_create_infos;
 
@@ -1287,7 +1285,7 @@ Ref<RenderPipeline> RDD::render_pipeline_create(
                             (p_rasterization_state.patch_control_points < 1 ||
                              p_rasterization_state.patch_control_points >
                                  physical_device_properties.limits.maxTessellationPatchSize),
-                        nullptr, "Invalid Vulkan tessellation");
+                        PipelineID(), "Invalid Vulkan tessellation");
     tessellation_create_info.patchControlPoints = p_rasterization_state.patch_control_points;
 
     // viewport
@@ -1410,12 +1408,11 @@ Ref<RenderPipeline> RDD::render_pipeline_create(
 
     VkGraphicsPipelineCreateInfo pipeline_create_info = {};
     pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipeline_create_info.stageCount = 0;  // p_shader->vk_stages_create_info.size();
-    ERR_FAIL_COND_V_MSG(pipeline_create_info.stageCount != 0, nullptr,
-                        "Can't create Vulkan pipeline without shader module");
 
-    pipeline_create_info.stageCount = shader_program->vk_pipeline_stages.size();
-    pipeline_create_info.pStages = shader_program->vk_pipeline_stages.data();
+    ERR_FAIL_COND_V_MSG(pipeline_create_info.stageCount != 0, PipelineID(),
+                        "Can't create Vulkan pipeline without shader module");
+    pipeline_create_info.stageCount = p_shader_program->vk_pipeline_stages.size();
+    pipeline_create_info.pStages = p_shader_program->vk_pipeline_stages.data();
     pipeline_create_info.pVertexInputState = &vertex_input;
     pipeline_create_info.pInputAssemblyState = &input_assembly_create_info;
     pipeline_create_info.pTessellationState = &tessellation_create_info;
@@ -1425,17 +1422,19 @@ Ref<RenderPipeline> RDD::render_pipeline_create(
     pipeline_create_info.pDepthStencilState = &depth_stencil_state_create_info;
     pipeline_create_info.pColorBlendState = &color_blend_state_create_info;
     pipeline_create_info.pDynamicState = &dynamic_state_create_info;
-    pipeline_create_info.layout = shader_program->vk_pipeline_layout;
+    pipeline_create_info.layout = p_shader_program->vk_pipeline_layout;
     pipeline_create_info.renderPass = p_render_pass;
     pipeline_create_info.subpass = p_render_subpass;
 
+    VkPipeline vk_pipeline = VK_NULL_HANDLE;
     VkResult result = vkCreateGraphicsPipelines(vk_device, nullptr, 1, &pipeline_create_info,
-                                                nullptr, &render_pipeline->vk_pipeline);
-    ERR_FAIL_COND_V_MSG(result, nullptr, "Couldn't create Vulkan graphics pipelines");
+                                                nullptr, &vk_pipeline);
+    ERR_FAIL_COND_V_MSG(result, PipelineID(), "Couldn't create Vulkan graphics pipelines");
 
-    render_pipeline->shader_program = shader_program;
+    Pipeline *pipeline = memnew(Pipeline);
+    pipeline->vk_pipeline = vk_pipeline;
 
-    return render_pipeline;
+    return PipelineID(pipeline);
 }
 
 /* swapchain */
@@ -1968,10 +1967,10 @@ Ref<UniformSet> RDD::uniform_set_create(Vector<BoundUniform> p_uniforms,
 
 void RDD::uniform_set_free(Ref<UniformSet> p_uniform_set) {}
 
-void RDD::command_bind_render_pipeline(Ref<CommandBuffer> p_cmd_buffer,
-                                       Ref<RenderPipeline> p_render_pipeline) {
+void RDD::command_bind_render_pipeline(Ref<CommandBuffer> p_cmd_buffer, PipelineID p_pipeline) {
+    Pipeline *pipeline = (Pipeline *)p_pipeline.id;
     vkCmdBindPipeline(p_cmd_buffer->vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      p_render_pipeline->vk_pipeline);
+                      pipeline->vk_pipeline);
 }
 
 void RDD::command_bind_render_uniform_sets(Ref<CommandBuffer> p_cmd_buffer,
