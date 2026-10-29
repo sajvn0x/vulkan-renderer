@@ -122,10 +122,10 @@ public:
     Ref<Semaphore> semaphore_create();
     void semaphore_free(Ref<Semaphore> p_semaphore);
 
-    // pipeline barriers
-    struct PipelineBarrier {};
-
-    Ref<PipelineBarrier> pipeline_barrier_create();
+    // pipeline barrier
+    void command_pipeline_barrier(CommandBufferID p_cmd_buffer, VkMemoryBarrier2 &p_memory_barrier,
+                                  Vector<VkBufferMemoryBarrier2> &p_buffer_barriers,
+                                  Vector<VkImageMemoryBarrier2> &p_image_barriers);
 
 private:
     /* Memory */

@@ -95,6 +95,24 @@ void RDD::semaphore_free(Ref<Semaphore> p_semaphore) {
     vkDestroySemaphore(vk_device, p_semaphore->vk_semaphore, nullptr);
 }
 
+void RDD::command_pipeline_barrier(RDD::CommandBufferID p_cmd_buffer,
+                                   VkMemoryBarrier2 &p_memory_barrier,
+                                   Vector<VkBufferMemoryBarrier2> &p_buffer_barriers,
+                                   Vector<VkImageMemoryBarrier2> &p_image_barriers) {
+    CommandBuffer *cmd_buffer = (CommandBuffer *)p_cmd_buffer.id;
+
+    VkDependencyInfo dependency_info = {};
+    dependency_info.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    dependency_info.memoryBarrierCount = 1;
+    dependency_info.pMemoryBarriers = &p_memory_barrier;
+    dependency_info.bufferMemoryBarrierCount = p_buffer_barriers.size();
+    dependency_info.pBufferMemoryBarriers = p_buffer_barriers.data();
+    dependency_info.imageMemoryBarrierCount = p_image_barriers.size();
+    dependency_info.pImageMemoryBarriers = p_image_barriers.data();
+
+    vkCmdPipelineBarrier2(cmd_buffer->vk_command_buffer, &dependency_info);
+}
+
 static const uint32_t SMALL_ALLOCATION_MAX_SIZE = 4096;
 
 VmaPool RDD::_find_or_create_small_allocs_pool(uint32_t p_mem_type_index) {

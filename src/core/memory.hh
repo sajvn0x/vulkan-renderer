@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 
 namespace Memory {
 
@@ -29,4 +30,11 @@ void mem_free(void *p_ptr);
 
 #define memnew_arr(m_class, m_amount) (m_class *)mem_alloc(sizeof(m_class) * m_amount)
 
-#define memdelete(m_ptr) mem_free(m_ptr)
+template <typename T>
+void memdelete(T *p_class) {
+    if constexpr (!std::is_trivially_destructible_v<T>) {
+        p_class->~T();
+    }
+
+    mem_free(p_class);
+}
