@@ -6,4 +6,5 @@ compile:
 
 fmt:
 	@find src/ -iname '*.hh' -o -iname '*.cc' | xargs clang-format -i
+	@find assets/shaders/ -iname '*.vert' -o -iname '*.frag' | xargs clang-format -i
 
