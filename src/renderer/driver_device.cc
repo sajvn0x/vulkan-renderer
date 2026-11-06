@@ -777,13 +777,21 @@ TextureID RDD::texture_create(const TextureFormat &p_format, const TextureView &
 
     create_info.samples = p_format.samples;
     create_info.tiling = VK_IMAGE_TILING_LINEAR;
+    create_info.usage = p_format.usage_bits;
 
     create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
+    VmaAllocationCreateInfo alloc_create_info = {};
+    alloc_create_info.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
     VkImage vk_image = VK_NULL_HANDLE;
-    VkResult err = vkCreateImage(vk_device, &create_info, nullptr, &vk_image);
-    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, TextureID(), "Failed to create image");
+    VmaAllocation allocation = nullptr;
+    VmaAllocationInfo alloc_info = {};
+
+    VkResult err = vmaCreateImage(allocator, &create_info, &alloc_create_info, &vk_image,
+                                  &allocation, &alloc_info);
+    ERR_FAIL_COND_V_MSG(err, TextureID(), "Couldn't able to create image");
 
     // image view
     VkImageViewCreateInfo image_view_create_info = {};
@@ -797,17 +805,24 @@ TextureID RDD::texture_create(const TextureFormat &p_format, const TextureView &
     image_view_create_info.components.a = p_view.swizzle_a;
     image_view_create_info.subresourceRange.levelCount = create_info.mipLevels;
     image_view_create_info.subresourceRange.layerCount = create_info.arrayLayers;
-    image_view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if (p_format.usage_bits & (VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
+        image_view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    } else {
+        image_view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    }
 
     VkImageView vk_image_view = VK_NULL_HANDLE;
-    err = vkCreateImageView(vk_device, &image_view_create_info, nullptr, &vk_image_view);
-    ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, TextureID(), "Failed to create image views");
+    vkCreateImageView(vk_device, &image_view_create_info, nullptr, &vk_image_view);
+    ERR_FAIL_COND_V_MSG(err, TextureID(), "Couldn't able to create image view");
 
     Texture *texture = memnew(Texture);
     texture->vk_image = vk_image;
     texture->vk_image_view = vk_image_view;
-    texture->vk_create_info = create_info;
     texture->vk_format = p_format.format;
+    texture->vk_create_info = create_info;
+    texture->vk_image_create_info = image_view_create_info;
+    texture->allocation.handle = allocation;
+    vmaGetAllocationInfo(allocator, texture->allocation.handle, &texture->allocation.info);
 
     return TextureID(texture);
 }
@@ -817,10 +832,8 @@ void RDD::texture_free(TextureID p_texture) {
 
     vkDestroyImageView(vk_device, texture->vk_image_view, nullptr);
     if (texture->allocation.handle) {
-        vkDestroyImage(vk_device, texture->vk_image, nullptr);
-        vmaFreeMemory(allocator, texture->allocation.handle);
+        vmaDestroyImage(allocator, texture->vk_image_create_info.image, texture->allocation.handle);
     }
-
     memdelete(texture);
 }
 
