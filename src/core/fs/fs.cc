@@ -21,12 +21,12 @@ SpirvFileResult FileSystem::read_spirv_file(const Path& path) {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
 
     if (!file.is_open()) {
-        return {false, {}, "Failed to open file: " / path};
+        return {false, {}, "Failed to open file: " + path.string()};
     }
 
     size_t size = file.tellg();
     if (size % 4 != 0) {
-        return {false, {}, "Invalid SPIR-V file size (not aligned to 4 bytes): " / path, 0};
+        return {false, {}, "Invalid SPIR-V file size (not aligned to 4 bytes): " + path.string(), 0};
     }
 
     Vector<uint32_t> buffer(size / 4);
@@ -35,7 +35,7 @@ SpirvFileResult FileSystem::read_spirv_file(const Path& path) {
     file.read(reinterpret_cast<char*>(buffer.data()), size);
 
     if (!file) {
-        return {false, {}, "Failed to read full SPIR-V file: " / path, 0};
+        return {false, {}, "Failed to read full SPIR-V file: " + path.string(), 0};
     }
 
     return {true, std::move(buffer), "", static_cast<uint32_t>(size)};

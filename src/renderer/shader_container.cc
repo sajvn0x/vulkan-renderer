@@ -54,7 +54,7 @@ Error ShaderProgram::load_shader_program(const String &shader_name, VkDevice vk_
     };
 
     for (Path &shader : shader_files) {
-        err = _build_shader_module_asset(shader);
+        err = _build_shader_module_asset(shader.string());
         ERR_FAIL_COND_V(err != OK, err);
     }
 

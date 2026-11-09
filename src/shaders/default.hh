@@ -1,6 +1,7 @@
 #pragma once
 
 #include "renderer/driver_device.hh"
+#include <array>
 
 class DefaultGraphicsPipeline {
     struct Vertex {
